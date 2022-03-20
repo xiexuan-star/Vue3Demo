@@ -19,6 +19,36 @@ test('reactive', () => {
   expect(triggerNum).toBe(3);
 });
 
+test('effect in operation', () => {
+  const obj = reactive({ a: 1, ok: true });
+  let triggerNum = 0;
+  effect(() => {
+    const a = 'a' in obj;
+    triggerNum++;
+  });
+  expect(triggerNum).toBe(1);
+  obj.a++;
+  expect(triggerNum).toBe(2);
+});
+
+test('effect for in loop', () => {
+  const obj = reactive({ a: 1, ok: true });
+  let triggerNum = 0;
+  effect(() => {
+    for (const key in obj) {
+      //
+    }
+    triggerNum++;
+  });
+  expect(triggerNum).toBe(1);
+  Reflect.set(obj, 'c', 4);
+  expect(triggerNum).toBe(2);
+  obj.a++;
+  expect(triggerNum).toBe(2);
+  Reflect.deleteProperty(obj, 'ok');
+  expect(triggerNum).toBe(3);
+});
+
 test('effect nested', () => {
   const obj = reactive({ a: 1, b: 2 });
   let effect1Num = 0, effect2Num = 0;
@@ -42,7 +72,7 @@ test('effect scheduler', async () => {
   let i = 0;
 
   effect(() => {
-    const a = obj.a
+    const a = obj.a;
     i++;
   }, {
     scheduler(f: Function) {
@@ -68,7 +98,7 @@ test('effect lazy', () => {
   let i = 0;
   const _run = effect(() => {
     i++;
-    const a = obj.a
+    const a = obj.a;
   }, { lazy: true });
   expect(i).toBe(0);
   _run();
@@ -87,7 +117,7 @@ test('computed', () => {
   expect(computeNum).toBe(0);
   effect(() => {
     effectNum++;
-    const a = com.value
+    const a = com.value;
   });
   expect(effectNum).toBe(1);
   expect(computeNum).toBe(1);

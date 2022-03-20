@@ -1,3 +1,11 @@
+enum TRIGGER_TYPE {
+  SET = 'SET',
+  ADD = 'ADD',
+  DELETE = 'DELETE'
+}
+
+const ITERATOR_KEY = Symbol('iterator');
+
 type ReactiveEffectOption = Partial<{
   scheduler(f: Function): void;
   lazy: boolean
@@ -30,14 +38,32 @@ class ReactiveEffect<T extends any = any> {
 
 export function reactive<T extends object>(obj: T): T {
   return new Proxy(obj, {
-    get(target, key: string) {
+    get(target, key: string, receiver) {
       track(target, key);
-      return target[key];
+      return Reflect.get(target, key, receiver);
     },
-    set(target, key: string, value: any) {
-      target[key] = value;
-      trigger(target, key);
+    set(target, key: string, value: any, receiver) {
+      const has = Object.prototype.hasOwnProperty.call(target, key);
+      Reflect.set(target, key, value, receiver);
+      trigger(target, key, has ? TRIGGER_TYPE.SET : TRIGGER_TYPE.ADD);
       return true;
+    },
+    has(target: T, key: string | symbol) {
+      track(target, key);
+      return Reflect.has(target, key);
+    },
+    ownKeys(target: T): ArrayLike<string | symbol> {
+      track(target, ITERATOR_KEY);
+      return Reflect.ownKeys(target);
+    },
+    deleteProperty(target: T, key: string | symbol): boolean {
+      const has = Object.prototype.hasOwnProperty.call(target, key);
+      const hasDelete = Reflect.deleteProperty(target, key);
+
+      if (has && hasDelete) {
+        trigger(target, key, TRIGGER_TYPE.DELETE);
+      }
+      return hasDelete;
     }
   });
 }
@@ -49,7 +75,7 @@ export function computed<T extends any>(fn: () => T) {
     lazy: true, scheduler() {
       if (!dirty) {
         dirty = true;
-        trigger(obj, 'value');
+        trigger(obj, 'value', TRIGGER_TYPE.SET);
       }
     }
   });
@@ -121,12 +147,12 @@ function traverse(source: unknown, seen = new Set<unknown>()) {
 
 const effectStack: (ReactiveEffect | null)[] = [];
 let activeEffect: ReactiveEffect | null = null;
-const targetMap = new WeakMap<object, Map<string, Set<ReactiveEffect>>>();
+const targetMap = new WeakMap<object, Map<string | symbol, Set<ReactiveEffect>>>();
 
-function getEffects(target: object, key: string) {
+function getEffects(target: object, key: string | symbol) {
   let depsMap = targetMap.get(target);
   if (!depsMap) {
-    targetMap.set(target, (depsMap = new Map<string, Set<ReactiveEffect>>()));
+    targetMap.set(target, (depsMap = new Map<string | symbol, Set<ReactiveEffect>>()));
   }
   let deps = depsMap.get(key);
   if (!deps) {
@@ -135,22 +161,30 @@ function getEffects(target: object, key: string) {
   return deps;
 }
 
-function track(target: Record<any, any>, key: string) {
+function track(target: Record<any, any>, key: string | symbol) {
   if (!activeEffect) return;
   const effects = getEffects(target, key);
   effects.add(activeEffect);
   activeEffect.deps.add(effects);
 }
 
-function trigger(target: Record<any, any>, key: string) {
+function trigger(target: Record<any, any>, key: string | symbol, type: TRIGGER_TYPE) {
+  const effectRun = new Set<ReactiveEffect>();
   const effects = getEffects(target, key);
-  new Set(effects).forEach(effect => {
-    if (effect && effect !== activeEffect) {
-      if (effect.option && effect.option.scheduler) {
-        effect.option.scheduler(effect.run.bind(effect));
-      } else {
-        effect.run();
-      }
+  effects.forEach(effect => {
+    effect && effect !== activeEffect && effectRun.add(effect);
+  });
+  if (type === TRIGGER_TYPE.ADD || type === TRIGGER_TYPE.DELETE) {
+    const iteratorEffect = getEffects(target, ITERATOR_KEY);
+    iteratorEffect.forEach(effect => {
+      effect && effect !== activeEffect && effectRun.add(effect);
+    });
+  }
+  effectRun.forEach(effect => {
+    if (effect.option && effect.option.scheduler) {
+      effect.option.scheduler(effect.run.bind(effect));
+    } else {
+      effect.run();
     }
   });
 }
