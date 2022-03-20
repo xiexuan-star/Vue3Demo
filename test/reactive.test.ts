@@ -13,6 +13,10 @@ test('reactive', () => {
   obj.a = 2;
   expect(triggerNum).toBe(2);
   expect(value).toBe(2);
+  obj.a = 2;
+  expect(triggerNum).toBe(2);
+  expect(value).toBe(2);
+  obj.a = 2;
   obj.ok = false;
   expect(triggerNum).toBe(3);
   obj.a = 100;
@@ -72,7 +76,7 @@ test('effect scheduler', async () => {
   let i = 0;
 
   effect(() => {
-    const a = obj.a;
+    Reflect.get(obj, 'a');
     i++;
   }, {
     scheduler(f: Function) {
@@ -98,7 +102,7 @@ test('effect lazy', () => {
   let i = 0;
   const _run = effect(() => {
     i++;
-    const a = obj.a;
+    Reflect.get(obj, 'a');
   }, { lazy: true });
   expect(i).toBe(0);
   _run();
@@ -106,6 +110,21 @@ test('effect lazy', () => {
   obj.a++;
   expect(i).toBe(2);
 });
+
+test('effect prototype', () => {
+  const a = reactive({ a: 1 });
+  const b = reactive({ b: 2 });
+  Object.setPrototypeOf(a, b);
+  let effectNum = 0;
+  effect(() => {
+    effectNum++;
+    Reflect.get(a, 'b');
+  });
+  expect(effectNum).toBe(1);
+  Reflect.set(a, 'b', 3);
+  expect(effectNum).toBe(2);
+});
+
 test('computed', () => {
   const obj = reactive({ a: 1, b: 2 });
   let computeNum = 0;

@@ -39,13 +39,21 @@ class ReactiveEffect<T extends any = any> {
 export function reactive<T extends object>(obj: T): T {
   return new Proxy(obj, {
     get(target, key: string, receiver) {
+      if (key === '__raw') {
+        return target;
+      }
       track(target, key);
       return Reflect.get(target, key, receiver);
     },
     set(target, key: string, value: any, receiver) {
+      const oldVal = target[key];
       const has = Object.prototype.hasOwnProperty.call(target, key);
       Reflect.set(target, key, value, receiver);
-      trigger(target, key, has ? TRIGGER_TYPE.SET : TRIGGER_TYPE.ADD);
+      if (receiver.__raw === target) {
+        if (oldVal !== value && !Number.isNaN(oldVal) && !Number.isNaN(value)) {
+          trigger(target, key, has ? TRIGGER_TYPE.SET : TRIGGER_TYPE.ADD);
+        }
+      }
       return true;
     },
     has(target: T, key: string | symbol) {
