@@ -37,15 +37,43 @@ class ReactiveEffect<T extends any = any> {
 }
 
 export function reactive<T extends object>(obj: T): T {
+  return createReactive(obj);
+}
+
+export function shallowReactive<T extends object>(obj: T): T {
+  return createReactive(obj, true);
+}
+
+export function readonly<T extends object>(obj: T): T {
+  return createReactive(obj, false, true);
+}
+
+export function shallowReadOnly<T extends object>(obj: T): T {
+  return createReactive(obj, true, true);
+}
+
+export function createReactive<T extends object>(obj: T, isShallow = false, isReadonly = false): T {
   return new Proxy(obj, {
     get(target, key: string, receiver) {
       if (key === '__raw') {
         return target;
       }
-      track(target, key);
-      return Reflect.get(target, key, receiver);
+      if (!isReadonly) {
+        track(target, key);
+      }
+      const res = Reflect.get(target, key, receiver);
+      if (isShallow) {
+        return res;
+      }
+      if (typeof res === 'object' && res != null) {
+        return isReadonly ? readonly(res) : reactive(res);
+      }
+      return res;
     },
     set(target, key: string, value: any, receiver) {
+      if (isReadonly) {
+        return true;
+      }
       const oldVal = target[key];
       const has = Object.prototype.hasOwnProperty.call(target, key);
       Reflect.set(target, key, value, receiver);

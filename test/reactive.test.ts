@@ -1,6 +1,70 @@
-import { computed, effect, reactive, watch } from '../reactive';
+import { computed, effect, reactive, readonly, shallowReactive, shallowReadOnly, watch } from '../reactive';
 
-test('reactive', () => {
+test('shallow reactive', () => {
+  const a = shallowReactive({
+    b: {
+      c: 3
+    }
+  });
+  let effectNum = 0;
+  effect(() => {
+    effectNum++;
+    a.b.c;
+  });
+  expect(effectNum).toBe(1);
+  a.b.c++;
+  expect(effectNum).toBe(1);
+});
+
+test('deep reactive', () => {
+  const a = reactive({
+    b: {
+      c: 3
+    }
+  });
+  let effectNum = 0;
+  effect(() => {
+    effectNum++;
+    a.b.c;
+  });
+  expect(effectNum).toBe(1);
+  a.b.c++;
+  expect(effectNum).toBe(2);
+});
+test('readonly',()=>{
+  const a = readonly({
+    b: {
+      c: 3
+    }
+  });
+  let effectNum = 0;
+  effect(() => {
+    effectNum++;
+    a.b.c;
+  });
+  expect(effectNum).toBe(1);
+  a.b.c++;
+  expect(effectNum).toBe(1);
+  expect(a.b.c).toBe(3)
+})
+test('shallow readonly',()=>{
+  const a = shallowReadOnly({
+    b: {
+      c: 3
+    }
+  });
+  let effectNum = 0;
+  effect(() => {
+    effectNum++;
+    a.b.c;
+  });
+  expect(effectNum).toBe(1);
+  a.b.c++;
+  expect(effectNum).toBe(1);
+  expect(a.b.c).toBe(4)
+})
+
+test('reactive cleanup', () => {
   const obj = reactive({ a: 1, ok: true });
   let value = obj.a;
   let triggerNum = 0;
