@@ -1,6 +1,6 @@
-import { computed, effect, reactive, readonly, shallowReactive, shallowReadOnly, watch } from '../reactive';
+import { computed, effect, reactive, readonly, shallowReactive, shallowReadOnly, watch } from '../reactivity';
 
-test('shallow reactive', () => {
+test('shallow reactivity', () => {
   const a = shallowReactive({
     b: {
       c: 3
@@ -16,7 +16,7 @@ test('shallow reactive', () => {
   expect(effectNum).toBe(1);
 });
 
-test('deep reactive', () => {
+test('deep reactivity', () => {
   const a = reactive({
     b: {
       c: 3
@@ -64,7 +64,7 @@ test('shallow readonly', () => {
   expect(a.b.c).toBe(4);
 });
 
-test('reactive cleanup', () => {
+test('reactivity cleanup', () => {
   const obj = reactive({ a: 1, ok: true });
   let value = obj.a;
   let triggerNum = 0;
@@ -87,7 +87,7 @@ test('reactive cleanup', () => {
   expect(triggerNum).toBe(3);
 });
 
-test('array reactive of length', () => {
+test('array reactivity of length', () => {
   const arr = reactive([1, 2, 3]);
   let effectNum = 0;
   effect(() => {
@@ -98,7 +98,7 @@ test('array reactive of length', () => {
   arr.push(4);
   expect(effectNum).toBe(2);
 });
-test('array reactive of set', () => {
+test('array reactivity of set', () => {
   const arr = reactive([1, 2, 3]);
   let effectNum1 = 0, effectNum2 = 0;
   effect(() => {
@@ -115,7 +115,7 @@ test('array reactive of set', () => {
   expect(effectNum1).toBe(1);
   expect(effectNum2).toBe(2);
 });
-test('array reactive of for...in loop', () => {
+test('array reactivity of for...in loop', () => {
   const arr = reactive([1, 2, 3]);
   let effectNum = 0;
   effect(() => {
