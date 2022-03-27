@@ -95,6 +95,9 @@ function iterator(target: IterableCollections,
       return done
         ? { value, done }
         : { done, value: isPair ? [wrap(value[0]), wrap(value[1])] : wrap(value) };
+    },
+    [Symbol.iterator]() {
+      return this;
     }
   };
 }
@@ -117,7 +120,7 @@ const createInstrumentations = () => {
   const readonlyInstrumentations = {};
   const shallowReadonlyInstrumentations = {};
   const shallowInstrumentations = {};
-  ['values', 'keys', Symbol.iterator].forEach(method => {
+  ['values', 'keys', 'entries', Symbol.iterator].forEach(method => {
     Reflect.set(mutableInstrumentations, method, function (this: IterableCollections) {
       return iterator(this, method);
     });

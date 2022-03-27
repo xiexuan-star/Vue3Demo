@@ -1,4 +1,4 @@
-import { effect, reactive, readonly, shallowReactive, shallowReadOnly } from '../reactivity';
+import { effect, reactive, readonly, shallowReactive, shallowReadOnly, stop } from '../reactivity';
 import { toRaw } from '../shared';
 
 test('shallow reactive', () => {
@@ -168,6 +168,21 @@ test('toRaw on object using reactive as prototype', () => {
   expect(raw).toBe(obj);
   expect(raw).not.toBe(toRaw(original));
 });
+test('stop reactive', () => {
+  const original = reactive({ foo: 1 });
+  let bar;
+  const runner = effect(() => {
+    bar = original.foo;
+  });
+  expect(bar).toBe(1);
+  original.foo++;
+  expect(bar).toBe(2);
+  stop(runner);
+  original.foo++;
+  expect(bar).toBe(2);
+  runner();
+  expect(bar).toBe(3);
+});
 test('set reactive', () => {
   const set = reactive(new Set<any>([1, 2]));
   let effectNum = 0;
@@ -207,6 +222,24 @@ test('map iterator reactive', () => {
   effect(() => {
     effectNum++;
     for (const [key, value] of map) {
+      key;
+      value.size;
+    }
+  });
+  expect(effectNum).toBe(1);
+  map.get(key)!.delete(1);
+  expect(effectNum).toBe(2);
+  map.set(key, new Set([2, 3, 4]));
+  expect(effectNum).toBe(3);
+});
+test('map entries reactive', () => {
+  const key = { key: 1 };
+  const value = new Set([1, 2]);
+  const map = reactive(new Map([[key, value]]));
+  let effectNum = 0;
+  effect(() => {
+    effectNum++;
+    for (const [key, value] of map.entries()) {
       key;
       value.size;
     }

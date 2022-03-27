@@ -1,5 +1,11 @@
-import { isMap } from '../shared';
+import { isFunction, isMap } from '../shared';
 import { TRIGGER_TYPE } from './operations';
+
+interface ReactiveEffectRunner<T extends any = any> {
+  (): T;
+
+  effect: ReactiveEffect;
+}
 
 export let shouldTrack = true;
 const trackStack: boolean[] = [];
@@ -29,10 +35,26 @@ type ReactiveEffectOption = Partial<{
 class ReactiveEffect<T extends any = any> {
   private parent: ReactiveEffect | null = null;
   deps = new Set<Set<ReactiveEffect>>();
+  private onStop?: Function;
+  private active = true;
 
   constructor(public fn: () => T, public option?: ReactiveEffectOption) {}
 
+  stop() {
+    if (this.active) {
+      cleanup(this);
+      this.active = false;
+      if (isFunction(this.onStop)) {
+        this.onStop();
+      }
+    }
+  }
+
   run() {
+    // TODO When I call the stop function, I can't restore the effect
+    if (!this.active) {
+      return this.fn();
+    }
     let parent: ReactiveEffect | null = activeEffect;
     while (parent) {
       if (parent === this) {
@@ -47,6 +69,7 @@ class ReactiveEffect<T extends any = any> {
     const res = this.fn();
     effectStack.pop();
     activeEffect = effectStack[effectStack.length - 1];
+    this.parent = null;
     return res;
   }
 }
@@ -54,6 +77,10 @@ class ReactiveEffect<T extends any = any> {
 const effectStack: (ReactiveEffect | null)[] = [];
 let activeEffect: ReactiveEffect | null = null;
 const targetMap = new WeakMap<object, Map<any, Set<ReactiveEffect>>>();
+
+export function stop(runner: ReactiveEffectRunner) {
+  runner.effect.stop();
+}
 
 function getEffects(target: object, key: unknown) {
   let depsMap = targetMap.get(target);
@@ -116,6 +143,7 @@ export function cleanup(effect: ReactiveEffect) {
   deps.forEach(effects => {
     effects.delete(effect);
   });
+
   deps.clear();
 }
 
@@ -124,5 +152,7 @@ export function effect<T extends any>(fn: () => T, option?: ReactiveEffectOption
   if (!option || !option.lazy) {
     effect.run();
   }
-  return effect.run.bind(effect);
+  const result: ReactiveEffectRunner = effect.run.bind(effect) as any;
+  result.effect = effect;
+  return result;
 }
