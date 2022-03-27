@@ -1,6 +1,11 @@
-import { builtInSymbols, isSymbol } from '../shared';
+import { builtInSymbols, isArray, isReadonly, isShallow, isSymbol, toRaw } from '../shared';
 import {
-  ITERATOR_KEY, pauseTracking, reactive, readonly, resetTracking, shouldTrack, track, trigger, TRIGGER_TYPE
+  ITERATOR_KEY, pauseTracking, reactive, ReactiveFlags, reactiveMap, readonly, readonlyMap, resetTracking,
+  shallowReactiveMap,
+  shallowReadonlyMap,
+  shouldTrack, track,
+  trigger,
+  TRIGGER_TYPE
 } from './index';
 
 interface ProxyHandler<T extends object> {
@@ -38,7 +43,7 @@ export const arrayInstrumentations: Record<string, Function> = {};
   arrayInstrumentations[method] = function (...args: any[]) {
     let result = original.apply(this, args);
     if (result === false || result === -1) {
-      result = original.apply(this.__raw, args);
+      result = original.apply(toRaw(this), args);
     }
     return result;
   };
@@ -59,8 +64,25 @@ const shallowReadonlyGet = /*#__PURE__*/ createGetter(true, true);
 
 function createGetter(isReadonly = false, isShallow = false) {
   return function (target: object, key: string, receiver) {
-    if (key === '__raw') {
+    if (key === ReactiveFlags.RAW && (receiver ===
+                                      (isReadonly
+                                          ? isShallow
+                                            ? shallowReadonlyMap
+                                            : readonlyMap
+                                          : isShallow
+                                            ? shallowReactiveMap
+                                            : reactiveMap
+                                      ).get(target))) {
       return target;
+    }
+    if (key === ReactiveFlags.IS_REACTIVE) {
+      return !isReadonly;
+    }
+    if (key === ReactiveFlags.IS_SHALLOW) {
+      return isShallow;
+    }
+    if (key === ReactiveFlags.IS_READONLY) {
+      return isReadonly;
     }
     if (Array.isArray(target) && arrayInstrumentations.hasOwnProperty(key)) {
       return Reflect.get(arrayInstrumentations, key, receiver);
@@ -82,16 +104,27 @@ function createGetter(isReadonly = false, isShallow = false) {
 const set = /*#__PURE__*/ createSetter();
 const shallowSet = /*#__PURE__*/ createSetter(true);
 
-function createSetter(isShallow = false) {
-  return function (target: object, key: string, newVal: any, receiver) {
-    const oldVal = target[key];
+function createSetter(shallow = false) {
+  // TODO 暂时没弄清楚在setter中的shallow有什么作用
+  return function (target: object, key: string, value: any, receiver) {
+    let oldValue = target[key];
+    if (!shallow && !isReadonly(value)) {
+      // TODO 暂不清楚为何shallow的value不需要toRaw
+      if (!isShallow(value)) {
+        // 处理数据污染(避免将响应式数据设置到original中)
+        value = toRaw(value);
+        oldValue = toRaw(oldValue);
+      }
+    } else {
+      // in shallow mode, objects are set as-is regardless of reactive or not
+    }
     const type = Array.isArray(target)
       ? (target.length <= +key ? TRIGGER_TYPE.ADD : TRIGGER_TYPE.SET)
       : (Object.prototype.hasOwnProperty.call(target, key) ? TRIGGER_TYPE.SET : TRIGGER_TYPE.ADD);
-    Reflect.set(target, key, newVal, receiver);
-    if (receiver.__raw === target) {
-      if (oldVal !== newVal && !Number.isNaN(oldVal) && !Number.isNaN(newVal)) {
-        trigger(target, key, type, newVal);
+    Reflect.set(target, key, value, receiver);
+    if (toRaw(receiver) === target) {
+      if (oldValue !== value && !Number.isNaN(oldValue) && !Number.isNaN(value)) {
+        trigger(target, key, type, value);
       }
     }
     return true;

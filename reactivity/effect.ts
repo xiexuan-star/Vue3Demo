@@ -1,21 +1,22 @@
+import { isMap } from '../shared';
 import { TRIGGER_TYPE } from './operations';
 
-export let shouldTrack = true
-const trackStack: boolean[] = []
+export let shouldTrack = true;
+const trackStack: boolean[] = [];
 
 export function pauseTracking() {
-  trackStack.push(shouldTrack)
-  shouldTrack = false
+  trackStack.push(shouldTrack);
+  shouldTrack = false;
 }
 
 export function enableTracking() {
-  trackStack.push(shouldTrack)
-  shouldTrack = true
+  trackStack.push(shouldTrack);
+  shouldTrack = true;
 }
 
 export function resetTracking() {
-  const last = trackStack.pop()
-  shouldTrack = last === undefined ? true : last
+  const last = trackStack.pop();
+  shouldTrack = last === undefined ? true : last;
 }
 
 export const ITERATOR_KEY = Symbol('iterator');
@@ -73,13 +74,13 @@ export function track(target: Record<any, any>, key: unknown) {
   activeEffect.deps.add(effects);
 }
 
-export function trigger(target: Record<any, any>, key: unknown, type: TRIGGER_TYPE, newVal: unknown) {
+export function trigger(target: Record<any, any>, key: unknown, type: TRIGGER_TYPE, newVal?: unknown) {
   const effectRun = new Set<ReactiveEffect>();
   const effects = getEffects(target, key);
   effects.forEach(effect => {
     effect && effect !== activeEffect && effectRun.add(effect);
   });
-  if (type === TRIGGER_TYPE.ADD || type === TRIGGER_TYPE.DELETE) {
+  if (type === TRIGGER_TYPE.ADD || type === TRIGGER_TYPE.DELETE || (type === TRIGGER_TYPE.SET && isMap(target))) {
     const iteratorEffect = getEffects(target, ITERATOR_KEY);
     iteratorEffect.forEach(effect => {
       effect && effect !== activeEffect && effectRun.add(effect);
