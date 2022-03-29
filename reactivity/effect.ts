@@ -26,6 +26,7 @@ export function resetTracking() {
 }
 
 export const ITERATOR_KEY = Symbol('iterator');
+export const MAP_KEYS_ITERATOR_KEY = Symbol('map-key-iterator');
 
 type ReactiveEffectOption = Partial<{
   scheduler(f: Function): void;
@@ -107,8 +108,14 @@ export function trigger(target: Record<any, any>, key: unknown, type: TRIGGER_TY
   effects.forEach(effect => {
     effect && effect !== activeEffect && effectRun.add(effect);
   });
-  if (type === TRIGGER_TYPE.ADD || type === TRIGGER_TYPE.DELETE || (type === TRIGGER_TYPE.SET && isMap(target))) {
+  if (type === TRIGGER_TYPE.ADD || type === TRIGGER_TYPE.DELETE || ((type === TRIGGER_TYPE.SET) && isMap(target))) {
     const iteratorEffect = getEffects(target, ITERATOR_KEY);
+    iteratorEffect.forEach(effect => {
+      effect && effect !== activeEffect && effectRun.add(effect);
+    });
+  }
+  if ((type === TRIGGER_TYPE.ADD || type === TRIGGER_TYPE.DELETE) && isMap(target)) {
+    const iteratorEffect = getEffects(target, MAP_KEYS_ITERATOR_KEY);
     iteratorEffect.forEach(effect => {
       effect && effect !== activeEffect && effectRun.add(effect);
     });

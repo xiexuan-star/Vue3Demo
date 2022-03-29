@@ -62,7 +62,7 @@ export function readonly<T extends object>(obj: T): T {
   return createReactive(obj, true, readonlyHandlers, {}, readonlyMap);
 }
 
-export function shallowReadOnly<T extends object>(obj: T): T {
+export function shallowReadonly<T extends object>(obj: T): T {
   return createReactive(obj, true, shallowReadonlyHandlers, {}, shallowReadonlyMap);
 }
 
@@ -86,8 +86,9 @@ function createReactive<T extends object>(target: Target, isReadonly = false, ba
   proxyMap.set(target, proxy);
   return proxy;
 }
+
 export const toReactive = <T extends unknown>(value: T): T =>
-  isObject(value) ? reactive(value) : value
+  isObject(value) ? reactive(value) : value;
 
 export const toReadonly = <T extends unknown>(value: T): T =>
-  isObject(value) ? readonly(value as Record<any, any>) : value
+  isObject(value) ? readonly(value as Record<any, any>) : value;

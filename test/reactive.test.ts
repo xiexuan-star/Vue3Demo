@@ -1,5 +1,6 @@
-import { effect, reactive, readonly, shallowReactive, shallowReadOnly, stop } from '../reactivity';
+import { effect, reactive, readonly, shallowReactive, shallowReadonly, stop } from '../reactivity';
 import { toRaw } from '../shared';
+import {effect as _effect,reactive as _reactive} from 'vue'
 
 test('shallow reactive', () => {
   const a = shallowReactive({
@@ -49,7 +50,7 @@ test('readonly', () => {
   expect(a.b.c).toBe(3);
 });
 test('shallow readonly', () => {
-  const a = shallowReadOnly({
+  const a = shallowReadonly({
     b: {
       c: 3
     }
@@ -177,6 +178,7 @@ test('stop reactive', () => {
   expect(bar).toBe(1);
   original.foo++;
   expect(bar).toBe(2);
+  // @ts-ignore
   stop(runner);
   original.foo++;
   expect(bar).toBe(2);
@@ -249,4 +251,72 @@ test('map entries reactive', () => {
   expect(effectNum).toBe(2);
   map.set(key, new Set([2, 3, 4]));
   expect(effectNum).toBe(3);
+});
+test('map values reactive', () => {
+  const key = { key: 1 };
+  const value = new Set([1, 2]);
+  const map = reactive(new Map([[key, value]]));
+  let effectNum = 0;
+  effect(() => {
+    effectNum++;
+    for (const v of map.values()) {
+      const a = v.size;
+    }
+  });
+  expect(effectNum).toBe(1);
+  map.get(key)!.delete(1);
+  expect(effectNum).toBe(2);
+  map.set(key, new Set([2, 3, 4]));
+  expect(effectNum).toBe(3);
+});
+test('map keys reactive', () => {
+  const key = { key: 1 };
+  const value = new Set([1, 2]);
+  const map = reactive(new Map([[key, value]]));
+  let effectNum = 0;
+  let reactiveKey
+  effect(() => {
+    effectNum++;
+    for (const key of map.keys()) {
+      reactiveKey = key;
+      reactiveKey.key
+    }
+  });
+  expect(effectNum).toBe(1);
+  reactiveKey.key ++;
+  expect(effectNum).toBe(2)
+});
+test('_map values reactive', () => {
+  const key = { key: 1 };
+  const value = new Set([1, 2]);
+  const map = _reactive(new Map([[key, value]]));
+  let effectNum = 0;
+  _effect(() => {
+    effectNum++;
+    for (const v of map.values()) {
+      const a = v.size;
+    }
+  });
+  expect(effectNum).toBe(1);
+  map.get(key)!.delete(1);
+  expect(effectNum).toBe(2);
+  map.set(key, new Set([2, 3, 4]));
+  expect(effectNum).toBe(3);
+});
+test('_map keys reactive', () => {
+  const key = { key: 1 };
+  const value = new Set([1, 2]);
+  const map = _reactive(new Map([[key, value]]));
+  let effectNum = 0;
+  let reactiveKey
+  _effect(() => {
+    effectNum++;
+    for (const key of map.keys()) {
+      reactiveKey = key;
+      reactiveKey.key
+    }
+  });
+  expect(effectNum).toBe(1);
+  reactiveKey.key++;
+  expect(effectNum).toBe(2)
 });

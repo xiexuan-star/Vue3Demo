@@ -1,5 +1,5 @@
 import { hasOwn, isMap, isShallow, toRaw } from '../shared';
-import { ITERATOR_KEY, track, trigger } from './effect';
+import { ITERATOR_KEY, MAP_KEYS_ITERATOR_KEY, track, trigger } from './effect';
 import { TRIGGER_TYPE } from './operations';
 import { ReactiveFlags, toReactive, toReadonly } from './reactive';
 
@@ -85,9 +85,10 @@ function iterator(target: IterableCollections,
                   isShallow = false,
                   isReadonly = false) {
   target = toRaw(target);
-  track(target, ITERATOR_KEY);
-  const isPair = method === 'entries' || (method === Symbol.iterator && isMap(target));
-  const it = target[Symbol.iterator]();
+  const targetIsMap = isMap(target);
+  track(target, (targetIsMap && method === 'keys') ? MAP_KEYS_ITERATOR_KEY : ITERATOR_KEY);
+  const isPair = method === 'entries' || (method === Symbol.iterator && targetIsMap);
+  const it = target[method]();
   const wrap = isShallow ? toShallow : isReadonly ? toReadonly : toReactive;
   return {
     next() {

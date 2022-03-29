@@ -44,3 +44,8 @@ export const isFunction = (val: unknown): val is Function =>
 export const isString = (val: unknown): val is string => typeof val === 'string'
 export const isObject = (val: unknown): val is Record<any, any> =>
   val !== null && typeof val === 'object'
+export const isIntegerKey = (key: unknown) =>
+  isString(key) &&
+  key !== 'NaN' &&
+  key[0] !== '-' &&
+  '' + parseInt(key, 10) === key
