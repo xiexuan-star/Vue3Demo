@@ -1,14 +1,25 @@
 import { isArray, isFunction, isObject, isString } from '../shared';
 
 export interface VNode {
-  el?: Container;
-  type: string;
+  el?: Container | Text | Comment;
+  type: string | symbol;
   props?: Record<string, any> | null;
   children?: VNode[] | string | null | number;
 }
 
+export const TEXT_NODE = Symbol('TEXT');
+export const COMMENT_NODE = Symbol('COMMENT');
+
 interface RendererOptions {
-  createElement(tag: string): any;
+  createElementNode(tag: string): any;
+
+  createTextNode(text: string): any;
+
+  setTextContent(node: Text, text: string): void;
+
+  createCommentNode(text: string): any;
+
+  setCommentText(node: Comment, text: string): void;
 
   unmount(el: any): void;
 
@@ -24,7 +35,17 @@ interface Container extends HTMLElement {
 }
 
 function createRenderer(options: RendererOptions) {
-  const { unmount, patchProps, createElement, setElementText, insert } = options;
+  const {
+    unmount,
+    patchProps,
+    createElementNode,
+    setElementText,
+    insert,
+    createCommentNode,
+    setCommentText,
+    createTextNode,
+    setTextContent
+  } = options;
 
   function render(vnode: VNode, container: string | Container | null) {
     if (typeof container === 'string') {
@@ -52,6 +73,26 @@ function createRenderer(options: RendererOptions) {
       } else {
         patchElement(n1, n2);
       }
+    } else if (type === TEXT_NODE) {
+      if (!n1) {
+        const el = n2.el = createTextNode(n2.children as string);
+        insert(el, container, null);
+      } else {
+        const el = n2.el = n1.el as Text;
+        if (n2.children !== n1.children) {
+          setTextContent(el, n2.children as string);
+        }
+      }
+    } else if (type === COMMENT_NODE) {
+      if (!n1) {
+        const el = n2.el = createCommentNode(n2.children as string);
+        insert(el, container, null);
+      } else {
+        const el = n2.el = n1.el as Comment;
+        if (n2.children !== n1.children) {
+          setCommentText(el, n2.children as string);
+        }
+      }
     } else if (isObject(type)) {
       // TODO component type
     } else {
@@ -60,7 +101,7 @@ function createRenderer(options: RendererOptions) {
   }
 
   function patchElement(n1: VNode, n2: VNode) {
-    const el = n2.el = n1.el!;
+    const el = n2.el = n1.el as Container;
     const oldProps = n1.props || {};
     const newProps = n2.props || {};
     for (let key in newProps) {
@@ -81,7 +122,9 @@ function createRenderer(options: RendererOptions) {
       if (isArray(n1.children)) {
         n1.children.forEach(child => unmount(child));
       }
-      setElementText(container, n2.children);
+      if (n1.children !== n2.children) {
+        setElementText(container, n2.children as string);
+      }
     } else if (isArray(n2.children)) {
       if (isArray(n1.children)) {
         // TODO diff
@@ -99,7 +142,7 @@ function createRenderer(options: RendererOptions) {
   }
 
   function mountElement(node: VNode, container: Container) {
-    const el = node.el = createElement(node.type);
+    const el = node.el = createElementNode(node.type as string);
     if (node.props) {
       for (const key in node.props) {
         patchProps(el, key, null, node.props[key]);
@@ -118,6 +161,9 @@ function createRenderer(options: RendererOptions) {
   return { render };
 }
 
+/**
+ * @description 判断prop是否是一个DOMAttribute
+ * */
 function shouldSetAsProps(el: HTMLElement, prop: string) {
   if (prop === 'form' && el.tagName === 'INPUT') return false;
   return prop in el;
@@ -138,7 +184,7 @@ function normalizeClass(classValue: unknown) {
   return '';
 }
 
-function patchProps(el: HTMLElement & { _vei: Record<string, any> }, prop: string, preVal, nextVal) {
+function patchProps(el: HTMLElement & { _vei: Record<string, any> }, prop: string, preVal: any, nextVal: any) {
   if (/^on/.test(prop)) {
     const eventName = prop.slice(2).toLowerCase();
     // 一个虚拟的事件处理对象，用于变更事件或添加一些额外的处理
@@ -176,7 +222,21 @@ function patchProps(el: HTMLElement & { _vei: Record<string, any> }, prop: strin
 
   } else if (prop === 'class') {
     el.className = normalizeClass(nextVal);
+  } else if (prop === 'style') {
+    if (isObject(nextVal)) {
+      for (const key in nextVal) {
+        el.style[key] = nextVal[key];
+      }
+    }
+    if (isObject(preVal)) {
+      for (const key in preVal) {
+        if (!(key in nextVal)) {
+          el.style[key] = '';
+        }
+      }
+    }
   } else if (shouldSetAsProps(el, prop)) {
+    // 这里的type是在DOMAttribute中的数据类型
     const type = typeof el[prop];
     if (type === 'boolean' && nextVal === '') {
       el[prop] = true;
@@ -184,12 +244,13 @@ function patchProps(el: HTMLElement & { _vei: Record<string, any> }, prop: strin
       el[prop] = nextVal;
     }
   } else {
+    // 如果不是一个DOMAttribute，则视为HTMLAttribute
     el.setAttribute(prop, nextVal);
   }
 }
 
 export const renderer = createRenderer({
-  createElement(tag: string): any {
+  createElementNode(tag: string): any {
     return document.createElement(tag);
   },
   setElementText(el: HTMLElement, text: string) {
@@ -205,5 +266,17 @@ export const renderer = createRenderer({
     } else {
       parent.appendChild(el);
     }
-  }
+  },
+  createTextNode(text: string) {
+    return document.createTextNode(text);
+  },
+  setTextContent(el: Text, text: any) {
+    el.nodeValue = text;
+  },
+  setCommentText(el: Comment, text: string) {
+    el.nodeValue = text;
+  },
+  createCommentNode(text: string) {
+    return document.createComment(text);
+  },
 });

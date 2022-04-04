@@ -1,13 +1,23 @@
 import { effect, ref } from '../../reactivity';
-import { renderer, VNode } from '../../renderer';
+import { COMMENT_NODE, renderer, TEXT_NODE, VNode } from '../../renderer';
 
 const { render } = renderer;
 const currentVal = ref(4);
 const alert = ref(false);
+const onBtnClick = (e: any) => {
+  alert.value = true;
+};
 effect(() => {
   const nodes: VNode = {
     type: 'h1', props: {
-      id: 'foo', onClick: alert.value ? (e: any) => {
+      id: 'foo',
+      style: {
+        display: 'flex',
+        'justify-content': 'center',
+        flexDirection: 'column',
+        width: '200px'
+      },
+      onClick: alert.value ? (e: any) => {
         console.log(e);
       } : null
     }, children: [
@@ -15,17 +25,16 @@ effect(() => {
       { type: 'nav', children: 'this is a nav' },
       {
         type: 'input',
-        props: { value: 'bar', class: ['class1 class2', { class3: true, class4: false }], disabled: '' }
+        props: { value: 'bar', disabled: '' }
       },
-      { type: 'br' },
       {
         type: 'button', props: {
-          onClick(e: any) {
-            alert.value = true;
-          }
+          onClick: onBtnClick
         },
         children: 'clickme'
       },
+      { type: TEXT_NODE, children: 'text' },
+      { type: COMMENT_NODE, children: 'comment' },
       {
         type: 'input',
         props: {
