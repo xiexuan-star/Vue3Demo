@@ -42,6 +42,8 @@ export const arrayInstrumentations: Record<string, Function> = {};
   const original = Array.prototype[method];
   arrayInstrumentations[method] = function (...args: any[]) {
     let result = original.apply(this, args);
+    // 当用户直接查找原始数据时，由于遍历时会返回proxy包装的对象(this指向proxy)
+    // 所以，当在proxy中没有找到时，需要去原始数据中查找（不会被proxy包装）
     if (result === false || result === -1) {
       result = original.apply(toRaw(this), args);
     }
@@ -52,6 +54,9 @@ export const arrayInstrumentations: Record<string, Function> = {};
   const original = Array.prototype[method];
   arrayInstrumentations[method] = function (...args: any[]) {
     pauseTracking();
+    // 由于stack类的操作会隐式地读取数组的长度，所以需要暂停track
+    // 否则将使其成为一个get与set一体的操作,容易导致死循环
+    // 在stack类操作中，依旧会调用对象中的set，所以trigger是正常触发的
     const result = original.apply(this, args);
     resetTracking();
     return result;

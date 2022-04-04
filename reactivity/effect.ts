@@ -57,6 +57,8 @@ class ReactiveEffect<T extends any = any> {
       return this.fn();
     }
     let parent: ReactiveEffect | null = activeEffect;
+    // 通过parent记录所有在一次trigger中调用的effect
+    // 所以，当之前触发的effect与当前调用的effect是同一个时, 不再触发, 否则会出现循环
     while (parent) {
       if (parent === this) {
         return;
@@ -68,6 +70,7 @@ class ReactiveEffect<T extends any = any> {
     effectStack.push(this);
     cleanup(this);
     const res = this.fn();
+    // effectStack用于嵌套的effect，当一个effect执行完毕后，复原activeEffect
     effectStack.pop();
     activeEffect = effectStack[effectStack.length - 1];
     this.parent = null;
@@ -108,24 +111,30 @@ export function trigger(target: Record<any, any>, key: unknown, type: TRIGGER_TY
   effects.forEach(effect => {
     effect && effect !== activeEffect && effectRun.add(effect);
   });
+  // 不管是添加还是删除，其实都会影响遍历的结果
+  // 由于Map数据结构的forEach方法不仅关系键，还关系值，所以Map的set操作也影响了遍历的结果
   if (type === TRIGGER_TYPE.ADD || type === TRIGGER_TYPE.DELETE || ((type === TRIGGER_TYPE.SET) && isMap(target))) {
     const iteratorEffect = getEffects(target, ITERATOR_KEY);
     iteratorEffect.forEach(effect => {
       effect && effect !== activeEffect && effectRun.add(effect);
     });
   }
+  // 由于keys的存在，Map结构有可能只受key的影响
+  // 所以，Map结构的add与delete需要同时触发mapKeys的effect
   if ((type === TRIGGER_TYPE.ADD || type === TRIGGER_TYPE.DELETE) && isMap(target)) {
     const iteratorEffect = getEffects(target, MAP_KEYS_ITERATOR_KEY);
     iteratorEffect.forEach(effect => {
       effect && effect !== activeEffect && effectRun.add(effect);
     });
   }
+  // 当向数组中新增元素时，需要同时触发数组的length的effect
   if (type === TRIGGER_TYPE.ADD && Array.isArray(target)) {
     const lengthEffect = getEffects(target, 'length');
     lengthEffect.forEach(effect => {
       effect && effect !== activeEffect && effectRun.add(effect);
     });
   }
+  // 当为数组设置length时，需要触发那些受此次操作影响的effect
   if (key === 'length' && Array.isArray(target)) {
     const depsMap = targetMap.get(target);
     depsMap && depsMap.forEach((effect, key) => {

@@ -141,6 +141,8 @@ function normalizeClass(classValue: unknown) {
 function patchProps(el: HTMLElement & { _vei: Record<string, any> }, prop: string, preVal, nextVal) {
   if (/^on/.test(prop)) {
     const eventName = prop.slice(2).toLowerCase();
+    // 一个虚拟的事件处理对象，用于变更事件或添加一些额外的处理
+    // 通过它更新事件处理函数时不需要调用removeEventListener
     const invokers: any = el._vei || (el._vei = {});
     let invoker = invokers[eventName];
     if (nextVal) {

@@ -1,5 +1,5 @@
 import { effect, ref } from '../../reactivity';
-import { renderer, VNode } from '../../renderer/render';
+import { renderer, VNode } from '../../renderer';
 
 const { render } = renderer;
 const currentVal = ref(4);
