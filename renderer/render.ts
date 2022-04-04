@@ -1,5 +1,12 @@
 import { isArray, isFunction, isObject, isString } from '../shared';
 
+export interface VNode {
+  el?: Container;
+  type: string;
+  props?: Record<string, any> | null;
+  children?: VNode[] | string | null | number;
+}
+
 interface RendererOptions {
   createElement(tag: string): any;
 
@@ -12,14 +19,19 @@ interface RendererOptions {
   insert(el: any, parent: any, anchor?: any | null): void;
 }
 
+interface Container extends HTMLElement {
+  _vnode: VNode;
+}
+
 function createRenderer(options: RendererOptions) {
   const { unmount, patchProps, createElement, setElementText, insert } = options;
 
-  function render(vnode: any, container: any) {
+  function render(vnode: VNode, container: string | Container | null) {
     if (typeof container === 'string') {
-      container = document.querySelector<HTMLElement>(container);
+      container = document.querySelector<Container>(container);
       if (!container) return;
     }
+    if (!container) return;
     if (vnode) {
       patch(container._vnode, vnode, container);
     } else if (container._vnode) {
@@ -28,7 +40,7 @@ function createRenderer(options: RendererOptions) {
     container._vnode = vnode;
   }
 
-  function patch(n1: any, n2: any, container: any) {
+  function patch(n1: VNode | null, n2: VNode, container: any) {
     if (n1 && n1.type !== n2.type) {
       unmount(n1);
       n1 = null;
@@ -38,9 +50,7 @@ function createRenderer(options: RendererOptions) {
       if (!n1) {
         mountElement(n2, container);
       } else {
-        // TODO update
-        unmount(n1);
-        mountElement(n2, container);
+        patchElement(n1, n2);
       }
     } else if (isObject(type)) {
       // TODO component type
@@ -49,7 +59,46 @@ function createRenderer(options: RendererOptions) {
     }
   }
 
-  function mountElement(node: any, container: any) {
+  function patchElement(n1: VNode, n2: VNode) {
+    const el = n2.el = n1.el!;
+    const oldProps = n1.props || {};
+    const newProps = n2.props || {};
+    for (let key in newProps) {
+      if (oldProps[key] !== newProps[key]) {
+        patchProps(el, key, oldProps[key], newProps[key]);
+      }
+    }
+    for (let key in oldProps) {
+      if (!(key in newProps)) {
+        patchProps(el, key, oldProps[key], null);
+      }
+    }
+    patchChildren(n1, n2, el);
+  }
+
+  function patchChildren(n1: VNode, n2: VNode, container: Container) {
+    if (isString(n2.children)) {
+      if (isArray(n1.children)) {
+        n1.children.forEach(child => unmount(child));
+      }
+      setElementText(container, n2.children);
+    } else if (isArray(n2.children)) {
+      if (isArray(n1.children)) {
+        // TODO diff
+        // 假设元素数量一定相同
+        n2.children.forEach((node, index) => {
+          patch(n1.children![index], node, container);
+        });
+      } else {
+        setElementText(container, '');
+        n2.children.forEach(node => {
+          patch(null, node, container);
+        });
+      }
+    }
+  }
+
+  function mountElement(node: VNode, container: Container) {
     const el = node.el = createElement(node.type);
     if (node.props) {
       for (const key in node.props) {
@@ -100,6 +149,7 @@ function patchProps(el: HTMLElement & { _vei: Record<string, any> }, prop: strin
         invoker.attached = performance.now();
       } else {
         invokers[eventName] = invoker = (e: any) => {
+          // 通过一个attached记录时间绑定的时间，当事件触发时，检查事件触发时间是否早于绑定时间，如果是，则不执行
           if (invoker.attached > e.timeStamp) return;
           // support array event
           if (isArray(invoker.value)) {
@@ -111,6 +161,7 @@ function patchProps(el: HTMLElement & { _vei: Record<string, any> }, prop: strin
           }
         };
         invoker.value = nextVal;
+        invoker.attached = performance.now();
         Reflect.set(el, '_vei', invoker);
         el.addEventListener(eventName, invoker);
       }

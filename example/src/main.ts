@@ -1,11 +1,11 @@
 import { effect, ref } from '../../reactivity';
-import { renderer } from '../../renderer/render';
+import { renderer, VNode } from '../../renderer/render';
 
 const { render } = renderer;
 const currentVal = ref(4);
 const alert = ref(false);
 effect(() => {
-  const nodes = {
+  const nodes: VNode = {
     type: 'h1', props: {
       id: 'foo', onClick: alert.value ? (e: any) => {
         console.log(e);
@@ -19,8 +19,10 @@ effect(() => {
       },
       { type: 'br' },
       {
-        type: 'button', onClick(e: any) {
-          alert.value = true;
+        type: 'button', props: {
+          onClick(e: any) {
+            alert.value = true;
+          }
         },
         children: 'clickme'
       },
