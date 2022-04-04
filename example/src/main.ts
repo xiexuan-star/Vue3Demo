@@ -1,8 +1,9 @@
 import { effect, ref } from '../../reactivity';
-import { COMMENT_NODE, renderer, TEXT_NODE, VNode } from '../../renderer';
+import { COMMENT_NODE, FRAGMENT_NODE, renderer, TEXT_NODE, VNode } from '../../renderer';
 
 const { render } = renderer;
-const currentVal = ref(4);
+const currentVal = ref('init');
+const listLen = ref(0);
 const alert = ref(false);
 const onBtnClick = (e: any) => {
   alert.value = true;
@@ -35,6 +36,13 @@ effect(() => {
       },
       { type: TEXT_NODE, children: 'text' },
       { type: COMMENT_NODE, children: 'comment' },
+      { type: 'br' },
+      {
+        type: FRAGMENT_NODE, children: [
+          { type: COMMENT_NODE, children: 'fragment comment' },
+          { type: TEXT_NODE, children: 'fragment' },
+        ]
+      },
       {
         type: 'input',
         props: {
@@ -46,6 +54,23 @@ effect(() => {
           class: ['class1 class2', { class3: true, class4: false }]
         }
       },
+      {
+        type: 'button', props: {
+          onClick: () => {
+            listLen.value++;
+          }
+        },
+        children: 'add'
+      },
+      {
+        type: 'ul',
+        children: Array.from({ length: listLen.value }).map((_, i) => {
+          return {
+            type: 'li',
+            children: `item ${ i }`
+          };
+        })
+      }
     ]
   };
   render(nodes, '#app');

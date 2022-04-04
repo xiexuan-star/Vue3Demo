@@ -2,6 +2,7 @@ import { isArray, isFunction, isObject, isString } from '../shared';
 
 export interface VNode {
   el?: Container | Text | Comment;
+  key?: any;
   type: string | symbol;
   props?: Record<string, any> | null;
   children?: VNode[] | string | null | number;
@@ -9,6 +10,7 @@ export interface VNode {
 
 export const TEXT_NODE = Symbol('TEXT');
 export const COMMENT_NODE = Symbol('COMMENT');
+export const FRAGMENT_NODE = Symbol('FRAGMENT');
 
 interface RendererOptions {
   createElementNode(tag: string): any;
@@ -48,9 +50,8 @@ function createRenderer(options: RendererOptions) {
   } = options;
 
   function render(vnode: VNode, container: string | Container | null) {
-    if (typeof container === 'string') {
+    if (isString(container)) {
       container = document.querySelector<Container>(container);
-      if (!container) return;
     }
     if (!container) return;
     if (vnode) {
@@ -93,6 +94,17 @@ function createRenderer(options: RendererOptions) {
           setCommentText(el, n2.children as string);
         }
       }
+    } else if (type === FRAGMENT_NODE) {
+      if (!n1) {
+        if (isArray(n2.children)) {
+          // 为什么不使用HTMLFragment?
+          n2.children?.forEach(node => {
+            patch(null, node, container);
+          });
+        }
+      } else {
+        patchChildren(n1, n2, container);
+      }
     } else if (isObject(type)) {
       // TODO component type
     } else {
@@ -127,16 +139,32 @@ function createRenderer(options: RendererOptions) {
       }
     } else if (isArray(n2.children)) {
       if (isArray(n1.children)) {
-        // TODO diff
-        // 假设元素数量一定相同
-        n2.children.forEach((node, index) => {
-          patch(n1.children![index], node, container);
-        });
+        diff(n1, n2, container);
       } else {
         setElementText(container, '');
         n2.children.forEach(node => {
           patch(null, node, container);
         });
+      }
+    }
+  }
+
+  function diff(n1: VNode, n2: VNode, container: Container) {
+    const oldChildren = n1.children as Array<VNode>;
+    const newChildren = n2.children as Array<VNode>;
+    const oldLen = oldChildren.length;
+    const newLen = newChildren.length;
+    const commonLen = Math.min(oldLen, newLen);
+    for (let i = 0; i < commonLen; i++) {
+      patch(oldChildren[i], newChildren[i], container);
+    }
+    if (oldLen > commonLen) {
+      for (let i = commonLen; i < oldLen; i++) {
+        unmount(oldChildren[i]);
+      }
+    } else if (newLen > commonLen) {
+      for (let i = commonLen; i < newLen; i++) {
+        patch(null, newChildren[i], container);
       }
     }
   }
@@ -162,7 +190,7 @@ function createRenderer(options: RendererOptions) {
 }
 
 /**
- * @description 判断prop是否是一个DOMAttribute
+ * @description 判断prop是否是一个DOMProperties
  * */
 function shouldSetAsProps(el: HTMLElement, prop: string) {
   if (prop === 'form' && el.tagName === 'INPUT') return false;
@@ -236,7 +264,7 @@ function patchProps(el: HTMLElement & { _vei: Record<string, any> }, prop: strin
       }
     }
   } else if (shouldSetAsProps(el, prop)) {
-    // 这里的type是在DOMAttribute中的数据类型
+    // 这里的type是在DOMProperties中的数据类型
     const type = typeof el[prop];
     if (type === 'boolean' && nextVal === '') {
       el[prop] = true;
@@ -244,8 +272,20 @@ function patchProps(el: HTMLElement & { _vei: Record<string, any> }, prop: strin
       el[prop] = nextVal;
     }
   } else {
-    // 如果不是一个DOMAttribute，则视为HTMLAttribute
+    // 如果不是一个DOMProperties,则视为HTMLAttributes
     el.setAttribute(prop, nextVal);
+  }
+}
+
+function unmount(node: VNode) {
+  if (node.type === FRAGMENT_NODE) {
+    if (Array.isArray(node.children)) {
+      node.children.forEach(child => {
+        unmount(child);
+      });
+    }
+  } else {
+    node.el?.parentNode?.removeChild(node.el);
   }
 }
 
@@ -257,9 +297,7 @@ export const renderer = createRenderer({
     el.innerText = text;
   },
   patchProps,
-  unmount(vnode: any) {
-    vnode.el.parentNode?.removeChild(vnode.el);
-  },
+  unmount,
   insert(el: HTMLElement, parent: HTMLElement, anchor?: HTMLElement) {
     if (anchor) {
       el.insertBefore(parent, anchor);
