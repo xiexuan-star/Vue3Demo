@@ -1,6 +1,6 @@
 ### 极简Diff
 ```typescript
-function diff1(n1: VNode, n2: VNode, container: Container) {
+function diff(n1: VNode, n2: VNode, container: Container) {
   const oldChildren = n1.children as Array<VNode>;
   const newChildren = n2.children as Array<VNode>;
   const oldLen = oldChildren.length;

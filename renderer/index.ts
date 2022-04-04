@@ -140,7 +140,7 @@ function createRenderer(options: RendererOptions) {
       }
     } else if (isArray(n2.children)) {
       if (isArray(n1.children)) {
-        diff(n1, n2, container);
+        patchKeyedChildren(n1, n2, container);
       } else {
         setElementText(container, '');
         n2.children.forEach(node => {
@@ -150,7 +150,7 @@ function createRenderer(options: RendererOptions) {
     }
   }
 
-  function diff(n1: VNode, n2: VNode, container: Container) {
+  function patchKeyedChildren(n1: VNode, n2: VNode, container: Container) {
     const oldChildren = n1.children as Array<VNode>;
     const newChildren = n2.children as Array<VNode>;
     const oldLen = oldChildren.length;
