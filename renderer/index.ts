@@ -1,4 +1,4 @@
-import { isArray, isFunction, isObject, isString } from '../shared';
+import { getSequence, isArray, isFunction, isObject, isString } from '../shared';
 
 export interface VNode {
   el?: Container | Text | Comment;
@@ -152,17 +152,16 @@ function createRenderer(options: RendererOptions) {
   function patchKeyedChildren(n1: VNode, n2: VNode, container: Container) {
     const oldChildren = n1.children as Array<VNode>;
     const newChildren = n2.children as Array<VNode>;
-    let newStart = 0;
+    let j = 0;
     let newEnd = newChildren.length - 1;
-    let oldStart = 0;
     let oldEnd = oldChildren.length - 1;
-    let newStartNode = newChildren[newStart];
+    let newStartNode = newChildren[j];
     let newEndNode = newChildren[newEnd];
-    let oldStartNode = oldChildren[oldStart];
+    let oldStartNode = oldChildren[j];
     let oldEndNode = oldChildren[oldEnd];
 
     function oldStartNext() {
-      oldStartNode = oldChildren[++oldStart];
+      oldStartNode = oldChildren[j];
     }
 
     function oldEndNext() {
@@ -170,65 +169,94 @@ function createRenderer(options: RendererOptions) {
     }
 
     function newStartNext() {
-      newStartNode = newChildren[++newStart];
+      newStartNode = newChildren[j];
     }
 
     function newEndNext() {
       newEndNode = newChildren[--newEnd];
     }
 
-    while (newStart <= newEnd && oldStart <= oldEnd) {
-      // 当提前处理了oldChildren中的节点时，遍历到的node有可能为空
-      if (!oldStartNode) {
-        oldStartNext();
-      } else if (!oldEndNode) {
-        oldEndNext();
-      } else if (newStartNode.key === oldStartNode.key) {
+    while (j <= newEnd && j <= oldEnd) {
+      if (newStartNode.key === oldStartNode.key) {
         patch(oldStartNode, newStartNode, container);
-        oldStartNext();
+        j++;
         newStartNext();
+        oldStartNext();
       } else if (newEndNode.key === oldEndNode.key) {
         patch(oldEndNode, newEndNode, container);
-        oldEndNext();
         newEndNext();
-      } else if (newStartNode.key === oldEndNode.key) {
-        patch(oldEndNode, newStartNode, container);
-        insert(newStartNode.el, container, oldStartNode.el);
-        newStartNext();
         oldEndNext();
-      } else if (newEndNode.key === oldStartNode.key) {
-        patch(oldStartNode, newEndNode, container);
-        insert(newEndNode.el, container, oldEndNode.el);
-        newEndNext();
-        oldStartNext();
       } else {
-        // 如果在按照首尾没有匹配上节点
-        // 那么用newStart到oldChildren中查找
-        const oldListIndex = oldChildren.findIndex(node => node.key === newStartNode.key);
-        if (~oldListIndex) {
-          // 如果找到复用节点，提前处理该节点并使其置空
-          const oldListTargetNode = oldChildren[oldListIndex];
-          Reflect.set(oldChildren, oldListIndex, null);
-          patch(oldListTargetNode, newStartNode, container);
-          insert(newStartNode.el, container, oldStartNode.el);
-          newStartNext();
+        break;
+      }
+    }
+    if (j > newEnd && j > oldEnd) {
+      // 绝对理想情况，顺序没有发生变化
+      return;
+    } else if (j > newEnd && j <= oldEnd) {
+      // 说明指针相交，且旧节点更多，此时应该删除
+      for (let i = j; i <= oldEnd; i++) {
+        unmount(oldChildren[i]);
+      }
+    } else if (j <= newEnd && j > oldEnd) {
+      // 与上一个情况相反，应新增节点
+      const anchor = newChildren[newEnd + 1]?.el;
+      while (j <= newEnd) {
+        patch(null, newChildren[j++], container, anchor);
+      }
+    } else {
+      // 没有出现上述情况，说明是非理想情况，需要进行移动
+      // 构建索引数组
+      const source = Array.from({ length: newEnd - j + 1 }).fill(-1) as number[];
+      // 填充索引数组
+      const newNodeMap: Record<string, number> = {};
+      for (let i = j; i <= newEnd; i++) {
+        const node = newChildren[i];
+        newNodeMap[node.key] = i;
+      }
+      let needMove = false;
+      let lastIndex = j;
+      for (let i = j; i <= oldEnd; i++) {
+        const oldNode = oldChildren[i];
+        const newNodeIndex = newNodeMap[oldNode.key];
+        const hasNewNode = newNodeIndex !== undefined;
+        if (hasNewNode) {
+          // 说明新旧节点可复用
+          patch(oldNode, newChildren[newNodeIndex], container);
+          source[newNodeIndex - j] = i;
+          if (lastIndex > newNodeIndex) {
+            // 同简单Diff，通过记录最大索引的方式判断索引是否为递增趋势
+            // 如果后续index小于lastIndex，那说明不是递增，此时需要移动节点
+            needMove = true;
+          } else {
+            lastIndex = newNodeIndex;
+          }
         } else {
-        // 如果没找到，说明是新增，此时patch就好
-          patch(null, newStartNode, container, oldStartNode.el);
-          newStartNext();
+          // 如果没找到新节点，那说明需要卸载
+          unmount(oldNode);
         }
       }
-    }
-    if (newStart <= newEnd) {
-      // 说明有节点还未处理,由于old已经遍历结束，所以这些必定是新增节点
-      for (let i = newStart; i <= newEnd; i++) {
-        patch(null, newChildren[i], container, oldStartNode.el);
-      }
-    }
-    if (oldStart <= oldStart) {
-      // 走到这一步，说明old中有节点未处理，但new的遍历已结束，所以需要将其删除
-      for (let i = oldStart; i <= oldEnd; i++) {
-        unmount(oldChildren[i]);
+      if (needMove) {
+        // 如果需要移动，则进入下一步，对最长递增子序列的判断
+        const sequence = getSequence(source);
+        let seqIndex = sequence.length - 1;
+        for (let i = newEnd; i >= j; i--) {
+          // 开始移动节点
+          const sourceIndex = i - j;
+          const sourceValue = source[sourceIndex];
+          if (sourceValue === -1) {
+            // 需要新增的节点,由于是从末尾开始遍历，插入到后一个节点之前即可
+            const anchor = newChildren[i + 1]?.el;
+            patch(null, newChildren[i], container, anchor);
+          } else if (sourceIndex !== sequence[seqIndex]) {
+            // 如果在递增序列中没找到该sourceIndex，说明需要移动
+            // 同样移动至下一个节点元素之前即可
+            const anchor = newChildren[i + 1]?.el;
+            insert(newChildren[i].el, container, anchor);
+          } else {
+            seqIndex--;
+          }
+        }
       }
     }
   }

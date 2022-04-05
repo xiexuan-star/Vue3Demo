@@ -72,6 +72,8 @@ function diff(n1: VNode, n2: VNode, container: Container) {
 }
 ```
 
+### 双端Diff
+
 ```typescript
 function diff(n1: VNode, n2: VNode, container: Container) {
   const oldChildren = n1.children as Array<VNode>;
