@@ -153,45 +153,83 @@ function createRenderer(options: RendererOptions) {
   function patchKeyedChildren(n1: VNode, n2: VNode, container: Container) {
     const oldChildren = n1.children as Array<VNode>;
     const newChildren = n2.children as Array<VNode>;
-    const oldLen = oldChildren.length;
-    const newLen = newChildren.length;
-    // 当前递增序列中最大的index
-    let lastIndex = 0;
-    for (let i = 0; i < newLen; i++) {
-      const newNode = newChildren[i];
-      let find = false;
-      for (let j = 0; j < oldLen; j++) {
-        const oldNode = oldChildren[j];
-        if (oldNode.key === newNode.key) {
-          find = true;
-          patch(oldNode, newNode, container);
-          // 如果节点在旧列表中的索引不满足递增,就说明需要移动
-          if (j < lastIndex) {
-            const preNode = newChildren[i - 1];
-            if (preNode) {
-              const anchor = preNode.el?.nextSibling;
-              // 移动到已经排序好的上一个新节点的后面
-              insert(oldNode.el, container, anchor);
-            }
-          } else {
-            lastIndex = j;
-          }
-          break;
+    let newStart = 0;
+    let newEnd = newChildren.length - 1;
+    let oldStart = 0;
+    let oldEnd = oldChildren.length - 1;
+    let newStartNode = newChildren[newStart];
+    let newEndNode = newChildren[newEnd];
+    let oldStartNode = oldChildren[oldStart];
+    let oldEndNode = oldChildren[oldEnd];
+
+    function oldStartNext() {
+      oldStartNode = oldChildren[++oldStart];
+    }
+
+    function oldEndNext() {
+      oldEndNode = oldChildren[--oldEnd];
+    }
+
+    function newStartNext() {
+      newStartNode = newChildren[++newStart];
+    }
+
+    function newEndNext() {
+      newEndNode = newChildren[--newEnd];
+    }
+
+    while (newStart <= newEnd && oldStart <= oldEnd) {
+      // 当提前处理了oldChildren中的节点时，遍历到的node有可能为空
+      if (!oldStartNode) {
+        oldStartNext();
+      } else if (!oldEndNode) {
+        oldEndNext();
+      } else if (newStartNode.key === oldStartNode.key) {
+        patch(oldStartNode, newStartNode, container);
+        oldStartNext();
+        newStartNext();
+      } else if (newEndNode.key === oldEndNode.key) {
+        patch(oldEndNode, newEndNode, container);
+        oldEndNext();
+        newEndNext();
+      } else if (newStartNode.key === oldEndNode.key) {
+        patch(oldEndNode, newStartNode, container);
+        insert(newStartNode.el, container, oldStartNode.el);
+        newStartNext();
+        oldEndNext();
+      } else if (newEndNode.key === oldStartNode.key) {
+        patch(oldStartNode, newEndNode, container);
+        insert(newEndNode.el, container, oldEndNode.el);
+        newEndNext();
+        oldStartNext();
+      } else {
+        // 如果在按照首尾没有匹配上节点
+        // 那么用newStart到oldChildren中查找
+        const oldListIndex = oldChildren.findIndex(node => node.key === newStartNode.key);
+        if (~oldListIndex) {
+          // 如果找到复用节点，提前处理该节点并使其置空
+          const oldListTargetNode = oldChildren[oldListIndex];
+          Reflect.set(oldChildren, oldListIndex, null);
+          patch(oldListTargetNode, newStartNode, container);
+          insert(newStartNode.el, container, oldStartNode.el);
+          newStartNext();
+        } else {
+        // 如果没找到，说明是新增，此时patch就好
+          patch(null, newStartNode, container, oldStartNode.el);
+          newStartNext();
         }
       }
-      // 如果在旧节点中没找到，说明是新增
-      if (!find) {
-        const preNode = newChildren[i - 1];
-        let anchor = preNode ? preNode.el!.nextSibling : container.firstChild;
-        patch(null, newNode, container, anchor);
+    }
+    if (newStart <= newEnd) {
+      // 说明有节点还未处理,由于old已经遍历结束，所以这些必定是新增节点
+      for (let i = newStart; i <= newEnd; i++) {
+        patch(null, newChildren[i], container, oldStartNode.el);
       }
     }
-    // 同时，如果旧节点在新节点中没找到，说明是移除
-    for (let i = 0; i < oldLen; i++) {
-      const oldNode = oldChildren[i];
-      const has = newChildren.find(newNode => newNode.key === oldNode.key);
-      if (!has) {
-        unmount(oldNode);
+    if (oldStart <= oldStart) {
+      // 走到这一步，说明old中有节点未处理，但new的遍历已结束，所以需要将其删除
+      for (let i = oldStart; i <= oldEnd; i++) {
+        unmount(oldChildren[i]);
       }
     }
   }

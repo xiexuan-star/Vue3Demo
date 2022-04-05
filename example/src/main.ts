@@ -14,18 +14,30 @@ const oldNodes = [
   { type: 'h3', key: 2, children: 'h3' },
 ];
 const newNodes = [
-  { type: 'h1', key: 0, children: 'h11' },
-  { type: 'h3', key: 2, children: 'h33' },
-  { type: 'h2', key: 1, children: 'h22' },
-  { type: 'h4', key: 3, children: 'h44' }
+  { type: 'h1', key: 0, children: 'h1' },
+  { type: 'h3', key: 2, children: 'h3' },
+  { type: 'h2', key: 1, children: 'h2' },
+  { type: 'h4', key: 3, children: 'h4' }
 ];
 effect(() => {
   const nodes: VNode = {
-    type: 'ul',
-    children: toggleList.value ? newNodes : oldNodes
+    type: 'section',
+    children: [
+      {
+        type: 'button', props: {
+          onClick() {
+            toggleList.value = !toggleList.value;
+          }
+        },
+        key: 0,
+        children: 'clickme!'
+      },
+      {
+        type: 'ul',
+        key: 1,
+        children: toggleList.value ? newNodes : oldNodes
+      }
+    ]
   };
   render(nodes, '#app');
 });
-setInterval(() => {
-  toggleList.value = !toggleList.value;
-}, 2_000);
