@@ -1,4 +1,3 @@
-import { last } from 'lodash-es';
 import { isArray, isFunction, isObject, isString } from '../shared';
 
 export interface VNode {
