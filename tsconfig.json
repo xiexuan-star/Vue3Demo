@@ -10,6 +10,6 @@
     "preserveConstEnums": true,
     "sourceMap": true,
     "downlevelIteration": true,
-    "lib": ["es6", "DOM"]
+    "lib": ["es2021", "DOM"]
   }
 }
