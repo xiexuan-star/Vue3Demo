@@ -1,11 +1,43 @@
+import { effect, reactive, shallowReactive } from '../reactivity';
 import { getSequence, isArray, isFunction, isObject, isString } from '../shared';
+
+export interface Component {
+  name?: string;
+  props?: Record<string, any>;
+
+  data(): Record<string, any>;
+
+  beforeCreate?(): any;
+
+  beforeMount?(): any;
+
+  beforeUpdate?(): any;
+
+  created?(): any;
+
+  updated?(): any;
+
+  mounted?(): any;
+
+
+  render(context: any): VNode;
+}
+
+export interface ComponentInstance {
+  state: Record<string, any>;
+  props: Record<string, any>;
+  attrs: Record<string, any>;
+  isMounted: boolean;
+  subTree: VNode | null;
+}
 
 export interface VNode {
   el?: Container | Text | Comment;
   key?: any;
-  type: string | symbol;
+  type: string | symbol | Component;
   props?: Record<string, any> | null;
   children?: VNode[] | string | null | number;
+  component?: ComponentInstance;
 }
 
 export const TEXT_NODE = Symbol('TEXT');
@@ -34,6 +66,25 @@ interface RendererOptions {
 
 interface Container extends HTMLElement {
   _vnode: VNode;
+}
+
+const queue = new Set<Function>();
+let isFlushing = false;
+const p = Promise.resolve();
+
+function queueJob(job: Function) {
+  queue.add(job);
+  if (!isFlushing) {
+    isFlushing = true;
+    p.then(() => {
+      try {
+        queue.forEach(f => f());
+      } finally {
+        isFlushing = false;
+        queue.clear();
+      }
+    });
+  }
 }
 
 function createRenderer(options: RendererOptions) {
@@ -106,11 +157,105 @@ function createRenderer(options: RendererOptions) {
         patchChildren(n1, n2, container);
       }
     } else if (isObject(type)) {
-      // TODO component type
+      if (!n1) {
+        mountComponent(n2, container, anchor);
+      } else {
+        patchComponent(n1, n2, container, anchor);
+      }
     } else {
       // TODO other types;
     }
   }
+
+  function resolveProps(options: Record<string, any> = {}, propsData?: Record<string, any> | null) {
+    const props: Record<string, any> = {};
+    const attrs: Record<string, any> = {};
+    propsData && Object.entries(propsData).forEach(([key, value]) => {
+      if (key in options) {
+        props[key] = value;
+      } else {
+        attrs[key] = value;
+      }
+    });
+    return [props, attrs];
+  }
+
+  function hasPropsChange(prevProps: Record<string, any>, nextProps: Record<string, any>) {
+    const nextKeys = Object.keys(nextProps);
+    const prevKeys = Object.keys(prevProps);
+    if (nextKeys.length !== prevKeys.length) return true;
+    for (let i = 0; i < nextKeys.length; i++) {
+      const key = nextKeys[i];
+      if (nextProps[key] !== prevProps[key]) return true;
+    }
+    return false;
+  }
+
+  function mountComponent(node: VNode, container: Container, anchor?: any) {
+    const componentOptions = node.type as Component;
+    // 生命周期函数实际上可能存在多个，所以需要序列化为一个数组，但此处不实现它，仅实现核心原理
+    const {
+      render,
+      data,
+      props: propsOption,
+      beforeCreate,
+      beforeMount,
+      beforeUpdate,
+      created,
+      mounted,
+      updated
+    } = componentOptions;
+    beforeCreate && beforeCreate();
+    const state = reactive(data());
+    const [props, attrs] = resolveProps(propsOption, node.props);
+    const instance: ComponentInstance = {
+      state,
+      props: shallowReactive(props),
+      attrs: shallowReactive(attrs),
+      isMounted: false,
+      subTree: null
+    };
+    created && created.call(state);
+    node.component = instance;
+    // 此effect为组件的主动更新
+    effect(() => {
+      const subTree = render.call(state, state);
+      if (!instance.isMounted) {
+        beforeMount && beforeMount.call(state);
+        patch(null, subTree, container, anchor);
+        node.el = subTree.el;
+        instance.isMounted = true;
+        mounted && queueJob(mounted.bind(state));
+      } else {
+        beforeUpdate && beforeUpdate.call(state);
+        patch(instance.subTree, subTree, container, anchor);
+        updated && queueJob(updated.bind(state));
+      }
+      instance.subTree = subTree;
+    }, { scheduler: queueJob });
+  }
+
+  function patchComponent(n1: VNode, n2: VNode, container: Container, anchor?: any) {
+    const instance = n2.component = n1.component;
+    const el = n2.el = n1.el;
+    const { props, attrs } = instance!;
+    if (hasPropsChange(n1.props = {}, n2.props = {})) {
+      const [nextProps, nextAttrs] = resolveProps((n2.type as Component).props, n2.props);
+      for (const nextPropsKey in nextProps) {
+        props[nextPropsKey] = nextProps[nextPropsKey];
+      }
+      for (const nextAttrsKey in nextAttrs) {
+        props[nextAttrsKey] = nextProps[nextAttrsKey];
+      }
+      for (const key in props) {
+        if (!(key in nextProps)) delete props[key];
+      }
+      for (const key in attrs) {
+        if (!(key in nextAttrs)) delete attrs[key];
+      }
+    }
+  }
+
 
   function patchElement(n1: VNode, n2: VNode) {
     const el = n2.el = n1.el as Container;
