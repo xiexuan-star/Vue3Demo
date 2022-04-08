@@ -1,11 +1,11 @@
-import { effect, reactive, shallowReactive } from '../reactivity';
+import { effect, isRef, reactive, shallowReactive, shallowReadonly, unref } from '../reactivity';
 import { getSequence, isArray, isFunction, isObject, isString } from '../shared';
 
 export interface Component {
   name?: string;
   props?: Record<string, any>;
 
-  data(): Record<string, any>;
+  data?(): Record<string, any>;
 
   beforeCreate?(): any;
 
@@ -19,6 +19,10 @@ export interface Component {
 
   mounted?(): any;
 
+  setup?(props: Record<string, any>, context: {
+    emit: (event: string, ...args: unknown[]) => void,
+    attrs: Record<string, any>
+  }): (() => VNode) | Record<string, any>;
 
   render(context: any): VNode;
 }
@@ -29,6 +33,7 @@ export interface ComponentInstance {
   attrs: Record<string, any>;
   isMounted: boolean;
   subTree: VNode | null;
+  mounted: Function[];
 }
 
 export interface VNode {
@@ -36,7 +41,7 @@ export interface VNode {
   key?: any;
   type: string | symbol | Component;
   props?: Record<string, any> | null;
-  children?: VNode[] | string | null | number;
+  children?: VNode[] | string | null | number | Record<string, (...args: unknown[]) => VNode>;
   component?: ComponentInstance;
 }
 
@@ -67,6 +72,25 @@ interface RendererOptions {
 interface Container extends HTMLElement {
   _vnode: VNode;
 }
+
+let currentInstance: ComponentInstance | null = null;
+
+export function getCurrentInstance() {
+  return currentInstance;
+}
+
+function setCurrentInstance(instance: ComponentInstance | null) {
+  currentInstance = instance;
+}
+
+export function onMounted(cb: Function) {
+  if (currentInstance) {
+    currentInstance.mounted.push(cb);
+  } else {
+    console.log('onMounted only can be called in setup function');
+  }
+}
+
 
 const queue = new Set<Function>();
 let isFlushing = false;
@@ -114,6 +138,7 @@ function createRenderer(options: RendererOptions) {
   }
 
   function patch(n1: VNode | null, n2: VNode, container: any, anchor?: any) {
+    if (!n2) return;
     if (n1 && n1.type !== n2.type) {
       unmount(n1);
       n1 = null;
@@ -171,7 +196,7 @@ function createRenderer(options: RendererOptions) {
     const props: Record<string, any> = {};
     const attrs: Record<string, any> = {};
     propsData && Object.entries(propsData).forEach(([key, value]) => {
-      if (key in options) {
+      if (key in options || key.startsWith('on')) {
         props[key] = value;
       } else {
         attrs[key] = value;
@@ -191,11 +216,10 @@ function createRenderer(options: RendererOptions) {
     return false;
   }
 
-  function mountComponent(node: VNode, container: Container, anchor?: any) {
-    const componentOptions = node.type as Component;
+  function mountComponent(initialVNode: VNode, container: Container, anchor?: any) {
+    const componentOptions = initialVNode.type as Component;
     // 生命周期函数实际上可能存在多个，所以需要序列化为一个数组，但此处不实现它，仅实现核心原理
     const {
-      render,
       data,
       props: propsOption,
       beforeCreate,
@@ -203,33 +227,90 @@ function createRenderer(options: RendererOptions) {
       beforeUpdate,
       created,
       mounted,
-      updated
+      updated,
+      setup
     } = componentOptions;
+    let { render } = componentOptions;
     beforeCreate && beforeCreate();
-    const state = reactive(data());
-    const [props, attrs] = resolveProps(propsOption, node.props);
+    const state = reactive(data && data() || {});
+    const [props, attrs] = resolveProps(propsOption, initialVNode.props);
+
     const instance: ComponentInstance = {
       state,
       props: shallowReactive(props),
       attrs: shallowReactive(attrs),
       isMounted: false,
-      subTree: null
+      subTree: null,
+      mounted: []
     };
-    created && created.call(state);
-    node.component = instance;
+    mounted && instance.mounted.push(mounted);
+    let setupState: Record<string, any> | undefined;
+
+    function emit(event: string, ...args: unknown[]) {
+      const eventName = `on${ event[0].toUpperCase() + event.slice(1) }`;
+      const handler = props[eventName];
+      isFunction(handler) && handler(...args);
+    }
+
+    setCurrentInstance(instance);
+    const setupResult = setup && setup(shallowReadonly(props), { attrs, emit });
+    setCurrentInstance(null);
+    if (isFunction(setupResult)) {
+      if (!!render) console.log('render function is overwrite');
+      render = setupResult;
+    } else if (isObject(setupResult)) {
+      setupState = setupResult;
+    }
+    const slots = initialVNode.children || {};
+    const renderContext = new Proxy(instance, {
+      get(t, k: string) {
+        // 最基本的slots实现，只是将对应的slot传递给context供render消费
+        if (k === '$slots') return slots;
+        const { props, attrs, state } = instance;
+        if (k in state) {
+          return unref(state[k]);
+        } else if (k in props) {
+          return unref(props[k]);
+        } else if (k in attrs) {
+          return unref(attrs[k]);
+        } else if (setupState && k in setupState) {
+          return unref(setupState[k]);
+        } else {
+          console.log(`property ${ k } it's exist in this context`);
+        }
+      },
+
+      set(t, k: string, v: any) {
+        const { props, attrs, state } = instance;
+        if (k in state) {
+          isRef(state[k]) ? state[k].value = v : state[k] = v;
+        } else if (k in props) {
+          isRef(props[k]) ? props[k].value = v : props[k] = v;
+        } else if (k in attrs) {
+          isRef(attrs[k]) ? attrs[k].value = v : attrs[k] = v;
+        } else if (setupState && k in setupState) {
+          isRef(setupState[k]) ? setupState[k].value = v : setupState[k] = v;
+        } else {
+          console.log(`property ${ k } it's exist in this context`);
+        }
+        return true;
+      },
+    });
+    created && created.call(renderContext);
+    initialVNode.component = instance;
     // 此effect为组件的主动更新
     effect(() => {
-      const subTree = render.call(state, state);
+      const subTree = render.call(renderContext, renderContext);
       if (!instance.isMounted) {
-        beforeMount && beforeMount.call(state);
+        beforeMount && beforeMount.call(renderContext);
         patch(null, subTree, container, anchor);
-        node.el = subTree.el;
+        initialVNode.el = subTree.el;
         instance.isMounted = true;
-        mounted && queueJob(mounted.bind(state));
+        queueJob(() => instance.mounted.forEach(cb => cb.call(renderContext)));
       } else {
-        beforeUpdate && beforeUpdate.call(state);
+        beforeUpdate && beforeUpdate.call(renderContext);
         patch(instance.subTree, subTree, container, anchor);
-        updated && queueJob(updated.bind(state));
+        updated && queueJob(updated.bind(renderContext));
       }
       instance.subTree = subTree;
     }, { scheduler: queueJob });
@@ -237,7 +318,7 @@ function createRenderer(options: RendererOptions) {
 
   function patchComponent(n1: VNode, n2: VNode, container: Container, anchor?: any) {
     const instance = n2.component = n1.component;
-    const el = n2.el = n1.el;
+    n2.el = n1.el;
     const { props, attrs } = instance!;
     if (hasPropsChange(n1.props = {}, n2.props = {})) {
       const [nextProps, nextAttrs] = resolveProps((n2.type as Component).props, n2.props);
@@ -406,17 +487,18 @@ function createRenderer(options: RendererOptions) {
     }
   }
 
-  function mountElement(node: VNode, container: Container) {
-    const el = node.el = createElementNode(node.type as string);
-    if (node.props) {
-      for (const key in node.props) {
-        patchProps(el, key, null, node.props[key]);
+
+  function mountElement(vnode: VNode, container: Container) {
+    const el = vnode.el = createElementNode(vnode.type as string);
+    if (vnode.props) {
+      for (const key in vnode.props) {
+        patchProps(el, key, null, vnode.props[key]);
       }
     }
-    if (typeof (node.children) === 'string') {
-      setElementText(el, node.children);
-    } else if (Array.isArray(node.children)) {
-      node.children.forEach(child => {
+    if (typeof (vnode.children) === 'string') {
+      setElementText(el, vnode.children);
+    } else if (Array.isArray(vnode.children)) {
+      vnode.children.forEach(child => {
         patch(null, child, el);
       });
     }
@@ -514,15 +596,15 @@ function patchProps(el: HTMLElement & { _vei: Record<string, any> }, prop: strin
   }
 }
 
-function unmount(node: VNode) {
-  if (node.type === FRAGMENT_NODE) {
-    if (Array.isArray(node.children)) {
-      node.children.forEach(child => {
+function unmount(vnode: VNode) {
+  if (vnode.type === FRAGMENT_NODE) {
+    if (Array.isArray(vnode.children)) {
+      vnode.children.forEach(child => {
         unmount(child);
       });
     }
   } else {
-    node.el?.parentNode?.removeChild(node.el);
+    vnode.el?.parentNode?.removeChild(vnode.el);
   }
 }
 

@@ -1,20 +1,21 @@
-import { effect, ref } from '../../reactivity';
-import { COMMENT_NODE, Component, FRAGMENT_NODE, renderer, TEXT_NODE, VNode } from '../../renderer';
+import { ref } from '../../reactivity';
+import { COMMENT_NODE, Component, onMounted, renderer, VNode } from '../../renderer';
 
 const { render } = renderer;
-const currentVal = ref('init');
 const toggleList = ref(false);
 const alert = ref(false);
-const onBtnClick = (e: any) => {
-  alert.value = true;
-};
 const TestComponent: Component = {
   name: 'TestComponent',
-  data() {
-    return { value: 0 };
-  },
-  mounted(this: any) {
-    this.value++;
+  setup(props, { emit }) {
+    const value = ref(0);
+    onMounted(() => {
+      console.log('mounted!!');
+      value.value++;
+    });
+    return {
+      update() {emit('click', 1, 2, 3);},
+      value
+    };
   },
   render(this: any, context: any): VNode {
     return {
@@ -24,9 +25,11 @@ const TestComponent: Component = {
           type: 'button', props: {
             onClick(this: any) {
               context.value++;
+              context.update();
             }
           }, children: 'click'
         },
+        this.$slots.default?.() ?? { type: COMMENT_NODE, children: 'comment' },
         { type: 'h1', children: this.value + '' }
       ]
     };
@@ -36,7 +39,17 @@ const oldNodes = [
   { type: 'h1', key: 0, children: 'h1' },
   { type: 'h2', key: 1, children: 'h2' },
   { type: 'h3', key: 2, children: 'h3' },
-  { type: TestComponent, key: 5 }
+  {
+    type: TestComponent, props: {
+      onClick(...args: any) {
+        console.log('emit listener=>', args);
+      }
+    }, children: {
+      default() {
+        return { type: 'article', children: 'I\'m slot!!' };
+      }
+    }, key: 5
+  }
 ];
 const newNodes = [
   { type: 'h1', key: 0, children: 'h1' },
