@@ -19,12 +19,16 @@ export interface Component {
 
   mounted?(): any;
 
+  unmounted?(): any;
+
+  beforeUnmount?(): any;
+
   setup?(props: Record<string, any>, context: {
     emit: (event: string, ...args: unknown[]) => void,
     attrs: Record<string, any>
   }): (() => VNode) | Record<string, any>;
 
-  render(context: any): VNode;
+  render(context: any, cache: any[]): VNode;
 }
 
 export interface ComponentInstance {
@@ -34,6 +38,9 @@ export interface ComponentInstance {
   isMounted: boolean;
   subTree: VNode | null;
   mounted: Function[];
+  beforeUnmount: Function[];
+  unmounted: Function[];
+  cache: any[];
 }
 
 export interface VNode {
@@ -83,6 +90,22 @@ function setCurrentInstance(instance: ComponentInstance | null) {
   currentInstance = instance;
 }
 
+export function onUnmounted(cb: Function) {
+  if (currentInstance) {
+    currentInstance.unmounted.push(cb);
+  } else {
+    console.log('onUnmount only can be called in setup function');
+  }
+}
+
+export function onBeforeUnmount(cb: Function) {
+  if (currentInstance) {
+    currentInstance.beforeUnmount.push(cb);
+  } else {
+    console.log('onBeforeUnmount only can be called in setup function');
+  }
+}
+
 export function onMounted(cb: Function) {
   if (currentInstance) {
     currentInstance.mounted.push(cb);
@@ -91,6 +114,23 @@ export function onMounted(cb: Function) {
   }
 }
 
+export function createVNode(type: VNode['type'], props?: VNode['props'], children?: VNode['children']): VNode {
+  const result = { type };
+  if (props) {
+    Reflect.set(result, 'props', props);
+    props.key && Reflect.set(result, 'key', props.key);
+  }
+  children && Reflect.set(result, 'children', children);
+  return result;
+}
+
+export function createCommentNode(children: string) {
+  return { type: COMMENT_NODE, children };
+}
+
+export function createTextNode(children: string) {
+  return { type: TEXT_NODE, children };
+}
 
 const queue = new Set<Function>();
 let isFlushing = false;
@@ -228,6 +268,7 @@ function createRenderer(options: RendererOptions) {
       created,
       mounted,
       updated,
+      unmounted,
       setup
     } = componentOptions;
     let { render } = componentOptions;
@@ -241,9 +282,14 @@ function createRenderer(options: RendererOptions) {
       attrs: shallowReactive(attrs),
       isMounted: false,
       subTree: null,
-      mounted: []
+      // 此处只针对onMounted函数实现，其他lifecycle原理相同
+      mounted: [],
+      unmounted: [],
+      beforeUnmount: [],
+      cache: []
     };
     mounted && instance.mounted.push(mounted);
+    unmounted && instance.unmounted.push(unmounted);
     let setupState: Record<string, any> | undefined;
 
     function emit(event: string, ...args: unknown[]) {
@@ -252,6 +298,7 @@ function createRenderer(options: RendererOptions) {
       isFunction(handler) && handler(...args);
     }
 
+    // currentInstance 只在setup中起作用
     setCurrentInstance(instance);
     const setupResult = setup && setup(shallowReadonly(props), { attrs, emit });
     setCurrentInstance(null);
@@ -264,6 +311,7 @@ function createRenderer(options: RendererOptions) {
     const slots = initialVNode.children || {};
     const renderContext = new Proxy(instance, {
       get(t, k: string) {
+        if (k === 'key') return;
         // 最基本的slots实现，只是将对应的slot传递给context供render消费
         if (k === '$slots') return slots;
         const { props, attrs, state } = instance;
@@ -300,7 +348,7 @@ function createRenderer(options: RendererOptions) {
     initialVNode.component = instance;
     // 此effect为组件的主动更新
     effect(() => {
-      const subTree = render.call(renderContext, renderContext);
+      const subTree = render.call(renderContext, renderContext, instance.cache);
       if (!instance.isMounted) {
         beforeMount && beforeMount.call(renderContext);
         patch(null, subTree, container, anchor);
@@ -597,6 +645,7 @@ function patchProps(el: HTMLElement & { _vei: Record<string, any> }, prop: strin
 }
 
 function unmount(vnode: VNode) {
+  console.log(vnode);
   if (vnode.type === FRAGMENT_NODE) {
     if (Array.isArray(vnode.children)) {
       vnode.children.forEach(child => {
@@ -604,7 +653,10 @@ function unmount(vnode: VNode) {
       });
     }
   } else {
+    const isComponent = isObject(vnode.type);
+    isComponent && vnode.component!.beforeUnmount.forEach(cb => cb());
     vnode.el?.parentNode?.removeChild(vnode.el);
+    isComponent && vnode.component!.unmounted.forEach(cb => cb());
   }
 }
 
