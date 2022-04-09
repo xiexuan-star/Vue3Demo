@@ -3,6 +3,7 @@ import { getSequence, isArray, isFunction, isObject, isString } from '../shared'
 
 export interface Component {
   name?: string;
+  __isKeepAlive?: boolean;
   props?: Record<string, any>;
 
   data?(): Record<string, any>;
@@ -28,7 +29,7 @@ export interface Component {
     attrs: Record<string, any>
   }): (() => VNode) | Record<string, any>;
 
-  render(context: any, cache: any[]): VNode;
+  render?(context: any, cache: any[]): VNode;
 }
 
 export interface ComponentInstance {
@@ -41,14 +42,22 @@ export interface ComponentInstance {
   beforeUnmount: Function[];
   unmounted: Function[];
   cache: any[];
+  keepAliveCtx?: { createElementNode(tag: string): any, move(vnode: VNode, container: Container, anchor?: any): void };
+
+  _deActivate?(vnode: VNode): void;
+
+  _activate?(vnode: VNode, container: Container, anchor?: any): void;
 }
 
 export interface VNode {
   el?: Container | Text | Comment;
   key?: any;
+  keptAlive?: boolean;
+  shouldKeepAlive?: boolean;
+  keepAliveInstance?: ComponentInstance;
   type: string | symbol | Component | ((props?: Record<string, any>) => VNode);
   props?: Record<string, any> | null;
-  children?: VNode[] | string | null | number | Record<string, (...args: unknown[]) => VNode>;
+  children?: VNode[] | string | null | number | (Record<string, (...args: unknown[]) => VNode>);
   component?: ComponentInstance;
 }
 
@@ -224,7 +233,11 @@ function createRenderer(options: RendererOptions) {
       }
     } else if (isObject(type) || isFunction(type)) {
       if (!n1) {
-        mountComponent(n2, container, anchor);
+        if (n2.keptAlive) {
+          n2.keepAliveInstance?._activate!(n2, container, anchor);
+        } else {
+          mountComponent(n2, container, anchor);
+        }
       } else {
         patchComponent(n1, n2, container, anchor);
       }
@@ -257,6 +270,19 @@ function createRenderer(options: RendererOptions) {
     return false;
   }
 
+  function move(vnode: VNode, container: Container, anchor?: any) {
+    if (vnode.type === FRAGMENT_NODE) {
+      isArray(vnode.children) &&
+      vnode.children.forEach(child => {
+        move(child, container, anchor);
+      });
+    } else if (vnode.component) {
+      move(vnode.component!.subTree!, container, anchor);
+    } else {
+      insert(vnode.el, container, anchor);
+    }
+  }
+
   function mountComponent(initialVNode: VNode, container: Container, anchor?: any) {
     const isFunctional = isFunction(initialVNode.type);
     const componentOptions = (isFunctional ? {
@@ -274,7 +300,8 @@ function createRenderer(options: RendererOptions) {
       mounted,
       updated,
       unmounted,
-      setup
+      setup,
+      __isKeepAlive
     } = componentOptions;
     let { render } = componentOptions;
     beforeCreate && beforeCreate();
@@ -293,6 +320,12 @@ function createRenderer(options: RendererOptions) {
       beforeUnmount: [],
       cache: []
     };
+    if (__isKeepAlive) {
+      instance.keepAliveCtx = {
+        move,
+        createElementNode
+      };
+    }
     mounted && instance.mounted.push(mounted);
     unmounted && instance.unmounted.push(unmounted);
     let setupState: Record<string, any> | undefined;
@@ -353,7 +386,7 @@ function createRenderer(options: RendererOptions) {
     initialVNode.component = instance;
     // 此effect为组件的主动更新
     effect(() => {
-      const subTree = render.call(renderContext, renderContext, instance.cache);
+      const subTree = render!.call(renderContext, renderContext, instance.cache);
       if (!instance.isMounted) {
         beforeMount && beforeMount.call(renderContext);
         patch(null, subTree, container, anchor);
@@ -650,6 +683,7 @@ function patchProps(el: HTMLElement & { _vei: Record<string, any> }, prop: strin
 }
 
 function unmount(vnode: VNode) {
+  vnode = vnode.component?.subTree ?? vnode;
   if (vnode.type === FRAGMENT_NODE) {
     if (Array.isArray(vnode.children)) {
       vnode.children.forEach(child => {
@@ -658,9 +692,14 @@ function unmount(vnode: VNode) {
     }
   } else {
     const isComponent = isObject(vnode.type);
-    isComponent && vnode.component!.beforeUnmount.forEach(cb => cb());
-    vnode.el?.parentNode?.removeChild(vnode.el);
-    isComponent && vnode.component!.unmounted.forEach(cb => cb());
+    if (vnode.shouldKeepAlive) {
+      // 如果是keepAlive节点，那么执行失活操作即可
+      vnode.keepAliveInstance?._deActivate!(vnode);
+    } else {
+      isComponent && vnode.component!.beforeUnmount.forEach(cb => cb());
+      vnode.el?.parentNode?.removeChild(vnode.el);
+      isComponent && vnode.component!.unmounted.forEach(cb => cb());
+    }
   }
 }
 
