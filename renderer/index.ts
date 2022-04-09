@@ -234,6 +234,7 @@ function createRenderer(options: RendererOptions) {
       }
     } else if (isObject(type) || isFunction(type)) {
       if (!n1) {
+        // keepAlive组件已经具有缓存时，执行activate操作即可迁移dom
         if (n2.keptAlive) {
           n2.keepAliveInstance?._activate!(n2, container, anchor);
         } else {
