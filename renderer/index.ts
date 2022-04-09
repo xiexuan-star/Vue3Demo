@@ -46,7 +46,7 @@ export interface ComponentInstance {
 export interface VNode {
   el?: Container | Text | Comment;
   key?: any;
-  type: string | symbol | Component;
+  type: string | symbol | Component | ((props?: Record<string, any>) => VNode);
   props?: Record<string, any> | null;
   children?: VNode[] | string | null | number | Record<string, (...args: unknown[]) => VNode>;
   component?: ComponentInstance;
@@ -115,10 +115,11 @@ export function onMounted(cb: Function) {
 }
 
 export function createVNode(type: VNode['type'], props?: VNode['props'], children?: VNode['children']): VNode {
-  const result = { type };
+  const result: VNode = { type };
   if (props) {
-    Reflect.set(result, 'props', props);
-    props.key && Reflect.set(result, 'key', props.key);
+    Reflect.set(result, 'props', { ...props });
+    props.key != null && Reflect.set(result, 'key', props.key);
+    Reflect.deleteProperty(result.props!, 'key');
   }
   children && Reflect.set(result, 'children', children);
   return result;
@@ -186,7 +187,7 @@ function createRenderer(options: RendererOptions) {
     const { type } = n2;
     if (isString(type)) {
       if (!n1) {
-        mountElement(n2, container);
+        mountElement(n2, container, anchor);
       } else {
         patchElement(n1, n2);
       }
@@ -221,7 +222,7 @@ function createRenderer(options: RendererOptions) {
       } else {
         patchChildren(n1, n2, container);
       }
-    } else if (isObject(type)) {
+    } else if (isObject(type) || isFunction(type)) {
       if (!n1) {
         mountComponent(n2, container, anchor);
       } else {
@@ -257,7 +258,11 @@ function createRenderer(options: RendererOptions) {
   }
 
   function mountComponent(initialVNode: VNode, container: Container, anchor?: any) {
-    const componentOptions = initialVNode.type as Component;
+    const isFunctional = isFunction(initialVNode.type);
+    const componentOptions = (isFunctional ? {
+      render: initialVNode.type,
+      props: initialVNode.props
+    } : initialVNode.type) as Component;
     // 生命周期函数实际上可能存在多个，所以需要序列化为一个数组，但此处不实现它，仅实现核心原理
     const {
       data,
@@ -536,7 +541,7 @@ function createRenderer(options: RendererOptions) {
   }
 
 
-  function mountElement(vnode: VNode, container: Container) {
+  function mountElement(vnode: VNode, container: Container, anchor?: any) {
     const el = vnode.el = createElementNode(vnode.type as string);
     if (vnode.props) {
       for (const key in vnode.props) {
@@ -550,7 +555,7 @@ function createRenderer(options: RendererOptions) {
         patch(null, child, el);
       });
     }
-    insert(el, container);
+    insert(el, container, anchor);
   }
 
   return { render };
@@ -645,7 +650,6 @@ function patchProps(el: HTMLElement & { _vei: Record<string, any> }, prop: strin
 }
 
 function unmount(vnode: VNode) {
-  console.log(vnode);
   if (vnode.type === FRAGMENT_NODE) {
     if (Array.isArray(vnode.children)) {
       vnode.children.forEach(child => {

@@ -90,7 +90,13 @@ const newNodes = [
   createVNode('h1', { key: 0 }, 'h1'),
   createVNode('h3', { key: 2 }, 'h3'),
   createVNode('h2', { key: 1 }, 'h2'),
-  createVNode('h4', { key: 3 }, 'h4')
+  createVNode('h4', { key: 3 }, 'h4'),
+  createVNode(() => {
+    return createVNode('h5', { key: 4 }, [
+      createVNode('p', { key: 0 }, 'paragraph1'),
+      createVNode('p', { key: 1 }, 'paragraph2')
+    ]);
+  })
 ];
 const App: Component = {
   name: 'App',

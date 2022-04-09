@@ -29,10 +29,14 @@ export function defineAsyncComponent(options: Loader | AsyncComponentOptions) {
       const loaded = ref(false);
       let retries = 0;
       let innerComponent: Component | null = null;
+      let unmounted = false;
+      onBeforeUnmount(() => {
+        unmounted = true;
+      });
 
       function load() {
         return loader().catch(err => {
-          if (onError) {
+          if (onError && !unmounted) {
             return new Promise<Component>((resolve, reject) => {
               onError(err, () => {
                 retries++;
