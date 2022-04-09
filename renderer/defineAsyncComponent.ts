@@ -10,6 +10,7 @@ export interface AsyncComponentOptions {
   delay?: number;
   loadingComponent?: Component;
   errComponent?: Component;
+  onError?: (err: Error, retry: () => void, fail: () => void, retries: number) => void;
 }
 
 export function defineAsyncComponent(options: Loader | AsyncComponentOptions) {
@@ -21,14 +22,31 @@ export function defineAsyncComponent(options: Loader | AsyncComponentOptions) {
     name: 'AsyncComponent',
     setup() {
       const asyncOptions = options as AsyncComponentOptions;
-      const { loadingComponent, delay, errComponent, loader, timeout } = asyncOptions;
+      const { onError, loadingComponent, delay, errComponent, loader, timeout } = asyncOptions;
 
-      // 加载机制
+      // 加载机制/重试机制
       const error = ref<null | Error>(null);
       const loaded = ref(false);
+      let retries = 0;
       let innerComponent: Component | null = null;
-      loader().then(vnode => {
-        innerComponent = vnode;
+
+      function load() {
+        return loader().catch(err => {
+          if (onError) {
+            return new Promise<Component>((resolve, reject) => {
+              onError(err, () => {
+                retries++;
+                resolve(load());
+              }, reject, retries);
+            });
+          } else {
+            throw err;
+          }
+        });
+      }
+
+      load().then(comp => {
+        innerComponent = comp;
         loaded.value = true;
       }).catch((err: Error) => {
         error.value = err;

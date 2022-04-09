@@ -6,17 +6,25 @@ const { render } = renderer;
 const toggleList = ref(false);
 const AsyncComponent = defineAsyncComponent({
   loader(): Promise<Component> {
-    return new Promise(resolve => {
+    return new Promise((resolve, reject) => {
       setTimeout(() => {
-        resolve({
+        Math.random() > 0.7 ? resolve({
           render() {
             return createVNode('section', null, 'hi,I\'m async component');
           }
-        });
-      }, 4_000);
+        }) : reject('what\'s a pity!');
+      }, 2_000);
     });
   },
-  timeout: 2_000,
+  onError(err, retry, fail, retries) {
+    console.log(err);
+    if (retries > 3) {
+      fail();
+    } else {
+      retry();
+    }
+  },
+  timeout: 1_000,
   delay: 500,
   loadingComponent: {
     render() {
@@ -25,7 +33,10 @@ const AsyncComponent = defineAsyncComponent({
   },
   errComponent: {
     render() {
-      return createVNode('img', { src: 'https://lh3.googleusercontent.com/ogw/ADea4I6cDfLDVGkG3EL30V5GSJFpT7Av735C4bwiixlH=s64-c-mo' });
+      return createVNode('section', null, [
+        createVNode('img', { src: 'https://lh3.googleusercontent.com/ogw/ADea4I6cDfLDVGkG3EL30V5GSJFpT7Av735C4bwiixlH=s64-c-mo' }),
+        createVNode('div', null, 'ah,It\'s failed')
+      ]);
     }
   }
 });
