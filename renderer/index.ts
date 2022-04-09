@@ -26,7 +26,8 @@ export interface Component {
 
   setup?(props: Record<string, any>, context: {
     emit: (event: string, ...args: unknown[]) => void,
-    attrs: Record<string, any>
+    attrs: Record<string, any>,
+    slots: Record<string, (props?: Record<string, any>) => VNode>
   }): (() => VNode) | Record<string, any>;
 
   render?(context: any, cache: any[]): VNode;
@@ -336,9 +337,10 @@ function createRenderer(options: RendererOptions) {
       isFunction(handler) && handler(...args);
     }
 
+    const slots: any = initialVNode.children || {};
     // currentInstance 只在setup中起作用
     setCurrentInstance(instance);
-    const setupResult = setup && setup(shallowReadonly(props), { attrs, emit });
+    const setupResult = setup && setup(shallowReadonly(props), { attrs, emit, slots });
     setCurrentInstance(null);
     if (isFunction(setupResult)) {
       if (!!render) console.log('render function is overwrite');
@@ -346,7 +348,6 @@ function createRenderer(options: RendererOptions) {
     } else if (isObject(setupResult)) {
       setupState = setupResult;
     }
-    const slots = initialVNode.children || {};
     const renderContext = new Proxy(instance, {
       get(t, k: string) {
         if (k === 'key') return;

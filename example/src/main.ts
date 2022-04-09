@@ -1,10 +1,9 @@
 import { COMMENT_NODE, Component, createVNode, FRAGMENT_NODE, onMounted, renderer, VNode } from '../../renderer';
-import { ref } from '../../reactivity';
+import { ref, unref } from '../../reactivity';
 import { defineAsyncComponent } from '../../renderer/defineAsyncComponent';
 import KeepAlive from '../../renderer/keepAlive';
 
 const { render } = renderer;
-const toggleList = ref(false);
 const AsyncComponent = defineAsyncComponent({
   loader(): Promise<Component> {
     return new Promise((resolve, reject) => {
@@ -72,8 +71,8 @@ const TestComponent: Component = {
     ]);
   }
 };
-const oldNodes: Component = {
-  name: 'oldNodes',
+const nodeList1: Component = {
+  name: 'nodeList1',
   render() {
     console.log('renderOldNodes!');
     return createVNode(FRAGMENT_NODE, null, [
@@ -94,8 +93,8 @@ const oldNodes: Component = {
     ]);
   }
 };
-const newNodes: Component = {
-  name: 'newNodes',
+const nodeList2: Component = {
+  name: 'nodeList2',
   render() {
     console.log('renderNewNodes!');
     return createVNode(FRAGMENT_NODE, null, [
@@ -112,26 +111,56 @@ const newNodes: Component = {
     ]);
   }
 };
+const nodeList3: Component = {
+  name: 'nodeList3',
+  setup() {
+    return () => {
+      console.log('renderNodesList3');
+      const value = ref('');
+      return createVNode(FRAGMENT_NODE, null, [
+        createVNode('input', {
+          value: unref(value), onInput(event: any) {
+            value.value = event.target.value;
+            console.log(value);
+          }
+        })
+      ]);
+    };
+  },
+};
 const App: Component = {
   name: 'App',
-  data() {
-    return {};
+  setup() {
+    const toggleList = ref(0);
+    return { toggleList };
   },
   render(context: any): VNode {
     return createVNode('section', null, [
       createVNode('button', {
         onClick() {
-          toggleList.value = !toggleList.value;
+          context.toggleList = 0;
         },
         key: 0
-      }, 'clickme!'),
-      createVNode('section', {
+      }, 'change to 0!'),
+      createVNode('button', {
+        onClick() {
+          context.toggleList = 1;
+        },
         key: 1
+      }, 'change to 1!'),
+      createVNode('button', {
+        onClick() {
+          context.toggleList = 2;
+        },
+        key: 2
+      }, 'change to 2!'),
+      createVNode('section', {
+        key: 3
       }, [
-        createVNode(KeepAlive, { key: 0 },
+        createVNode(KeepAlive, { key: 0, max: 2 },
           {
             default() {
-              return toggleList.value ? createVNode(newNodes) : createVNode(oldNodes);
+              return [createVNode(nodeList1), createVNode(nodeList2), createVNode(nodeList3)][context.toggleList];
             }
           })
       ])
