@@ -1,5 +1,5 @@
-import { isObject } from '../shared';
-import { Component, getCurrentInstance, VNode } from './index';
+import { isObject } from '../../shared';
+import { Component, getCurrentInstance, VNode } from '../renderer';
 
 export default {
   name: 'KeepAlive',

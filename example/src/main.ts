@@ -1,7 +1,7 @@
-import { COMMENT_NODE, Component, createVNode, FRAGMENT_NODE, onMounted, renderer, VNode } from '../../renderer';
+import { COMMENT_NODE, Component, createVNode, FRAGMENT_NODE, onMounted, renderer, VNode } from '../../runtime-core/renderer';
 import { ref, unref } from '../../reactivity';
-import { defineAsyncComponent } from '../../renderer/defineAsyncComponent';
-import KeepAlive from '../../renderer/keepAlive';
+import { defineAsyncComponent } from '../../runtime-core/defineAsyncComponent';
+import KeepAlive from '../../runtime-core/components/keepAlive';
 
 const { render } = renderer;
 const AsyncComponent = defineAsyncComponent({

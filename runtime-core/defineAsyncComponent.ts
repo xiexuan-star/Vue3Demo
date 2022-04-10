@@ -1,6 +1,6 @@
 import { ref } from '../reactivity';
 import { isFunction } from '../shared';
-import { Component, createCommentNode, createVNode, onBeforeUnmount, VNode } from './index';
+import { Component, createCommentNode, createVNode, onBeforeUnmount, VNode } from './renderer';
 
 type Loader = (props?: Record<string, any>) => Promise<Component>
 
