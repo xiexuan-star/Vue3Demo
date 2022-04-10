@@ -310,6 +310,7 @@ function createRenderer(options: RendererOptions) {
         move(child, container, anchor);
       });
     } else if (isObject(vnode.type) && (vnode.type as Component).__isTeleport) {
+      // 如果是Teleport组件，那么将控制权移交至teleport组件
       (vnode.type as Component).move!(vnode, container, anchor, { move });
     } else if (vnode.component) {
       move(vnode.component!.subTree!, container, anchor);
