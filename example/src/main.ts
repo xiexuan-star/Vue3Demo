@@ -143,26 +143,26 @@ const nodeList3: Component = {
 const App: Component = {
   name: 'App',
   setup() {
-    const toggleList = ref(0);
-    return { toggleList };
+    const listType = ref(0);
+    return { listType };
   },
   render(context: any): VNode {
     return createVNode('section', null, [
       createVNode('button', {
         onClick() {
-          context.toggleList = 0;
+          context.listType = 0;
         },
         key: 0
       }, 'change to 0!'),
       createVNode('button', {
         onClick() {
-          context.toggleList = 1;
+          context.listType = 1;
         },
         key: 1
       }, 'change to 1!'),
       createVNode('button', {
         onClick() {
-          context.toggleList = 2;
+          context.listType = 2;
         },
         key: 2
       }, 'change to 2!'),
@@ -172,7 +172,7 @@ const App: Component = {
         createVNode(KeepAlive, { key: 0, max: 2 },
           {
             default() {
-              return [createVNode(nodeList1), createVNode(nodeList2), createVNode(nodeList3)][context.toggleList];
+              return [createVNode(nodeList1), createVNode(nodeList2), createVNode(nodeList3)][context.listType];
             }
           })
       ])
