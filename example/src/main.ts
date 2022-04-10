@@ -1,4 +1,5 @@
 import Teleport from '../../runtime-core/components/teleport';
+import Transition from '../../runtime-core/components/transition';
 import {
   COMMENT_NODE, Component, createVNode, FRAGMENT_NODE, onMounted, renderer, VNode
 } from '../../runtime-core/renderer';
@@ -82,6 +83,11 @@ const nodeList1: Component = {
       createVNode(Teleport, { key: -1, to: '#teleport' }, [
         createVNode('p', null, `Hi! I'm teleport!`)
       ]),
+      createVNode(Transition, { key: -2, name: 'test' }, {
+        default() {
+          return createVNode('div');
+        }
+      }),
       createVNode('h1', { key: 0 }, 'h1'),
       createVNode('h2', { key: 1 }, 'h2'),
       createVNode('h3', { key: 2 }, 'h3'),

@@ -88,6 +88,11 @@ export interface VNode {
   props?: Record<string, any> | null;
   children?: VNode[] | string | null | number | (Record<string, (...args: unknown[]) => VNode>);
   component?: ComponentInstance;
+  transition?: {
+    beforeEnter(el: HTMLElement): void
+    enter(el: HTMLElement): void;
+    leave(el: HTMLElement, performRemove: () => void): void
+  };
 }
 
 export const TEXT_NODE = Symbol('TEXT');
@@ -315,7 +320,14 @@ function createRenderer(options: RendererOptions) {
     } else if (vnode.component) {
       move(vnode.component!.subTree!, container, anchor);
     } else {
-      insert(vnode.el, container, anchor);
+      function performRemove() {
+        insert(vnode.el, container, anchor);
+      }
+      if (vnode.transition) {
+        vnode.transition.leave(vnode.el! as any, performRemove);
+      } else {
+        performRemove();
+      }
     }
   }
 
@@ -624,7 +636,13 @@ function createRenderer(options: RendererOptions) {
         patch(null, child, el);
       });
     }
+    if (vnode.transition) {
+      vnode.transition.beforeEnter(el);
+    }
     insert(el, container, anchor);
+    if (vnode.transition) {
+      vnode.transition.enter(el);
+    }
   }
 
   return { render };
@@ -740,7 +758,16 @@ function unmount(vnode: VNode) {
       }
     } else {
       isComponent && vnode.component!.beforeUnmount.forEach(cb => cb());
-      vnode.el?.parentNode?.removeChild(vnode.el);
+
+      function performRemove() {
+        vnode.el?.parentNode?.removeChild(vnode.el);
+      }
+
+      if (vnode.transition) {
+        vnode.transition.leave(vnode.el! as any, performRemove);
+      } else {
+        performRemove();
+      }
       isComponent && vnode.component!.unmounted.forEach(cb => cb());
     }
   }
