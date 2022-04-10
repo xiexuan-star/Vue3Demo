@@ -1,9 +1,37 @@
 import { effect, isRef, reactive, shallowReactive, shallowReadonly, unref } from '../reactivity';
 import { getSequence, isArray, isFunction, isObject, isString } from '../shared';
 
+export interface PatchFn {
+  (n1: null | VNode, n2: VNode, container: Container, anchor?: any): void;
+}
+
+export interface PatchKeyedChildrenFn {
+  (n1: VNode, n2: VNode, container: Container): void;
+}
+
+export interface UnmountFn {
+  (vnode: VNode): void;
+}
+
+export interface MoveFn {
+  (vnode: VNode, container: Container, anchor?: any): void;
+}
+
 export interface Component {
   name?: string;
   __isKeepAlive?: boolean;
+  __isTeleport?: boolean;
+
+  move?(vnode: VNode, container: Container, anchor: any, handler: { move }): void;
+
+  process?(n1: null | VNode, n2: VNode, container: Container, anchor: any,
+           handler: {
+             patch: PatchFn,
+             patchKeyedChildren: PatchKeyedChildrenFn,
+             unmount: UnmountFn,
+             move: MoveFn
+           }): void;
+
   props?: Record<string, any>;
 
   data?(): Record<string, any>;
@@ -233,7 +261,10 @@ function createRenderer(options: RendererOptions) {
         patchChildren(n1, n2, container);
       }
     } else if (isObject(type) || isFunction(type)) {
-      if (!n1) {
+      if ((type as Component).__isTeleport) {
+        // 如果是Teleport组件，那么将控制权移交至teleport组件
+        (type as Component).process!(n1, n2, container, anchor, { patch, patchKeyedChildren, unmount, move });
+      } else if (!n1) {
         // keepAlive组件已经具有缓存时，执行activate操作即可迁移dom
         if (n2.keptAlive) {
           n2.keepAliveInstance?._activate!(n2, container, anchor);
@@ -278,6 +309,8 @@ function createRenderer(options: RendererOptions) {
       vnode.children.forEach(child => {
         move(child, container, anchor);
       });
+    } else if (isObject(vnode.type) && (vnode.type as Component).__isTeleport) {
+      (vnode.type as Component).move!(vnode, container, anchor, { move });
     } else if (vnode.component) {
       move(vnode.component!.subTree!, container, anchor);
     } else {
@@ -697,6 +730,13 @@ function unmount(vnode: VNode) {
     if (vnode.shouldKeepAlive) {
       // 如果是keepAlive节点，那么执行失活操作即可
       vnode.keepAliveInstance?._deActivate!(vnode);
+    } else if (isComponent && (vnode.type as Component).__isTeleport) {
+      // 暂时只考虑array
+      if (Array.isArray(vnode.children)) {
+        vnode.children.forEach(child => {
+          unmount(child);
+        });
+      }
     } else {
       isComponent && vnode.component!.beforeUnmount.forEach(cb => cb());
       vnode.el?.parentNode?.removeChild(vnode.el);

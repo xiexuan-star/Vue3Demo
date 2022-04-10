@@ -1,4 +1,7 @@
-import { COMMENT_NODE, Component, createVNode, FRAGMENT_NODE, onMounted, renderer, VNode } from '../../runtime-core/renderer';
+import Teleport from '../../runtime-core/components/teleport';
+import {
+  COMMENT_NODE, Component, createVNode, FRAGMENT_NODE, onMounted, renderer, VNode
+} from '../../runtime-core/renderer';
 import { ref, unref } from '../../reactivity';
 import { defineAsyncComponent } from '../../runtime-core/defineAsyncComponent';
 import KeepAlive from '../../runtime-core/components/keepAlive';
@@ -76,6 +79,9 @@ const nodeList1: Component = {
   render() {
     console.log('renderOldNodes!');
     return createVNode(FRAGMENT_NODE, null, [
+      createVNode(Teleport, { key: -1, to: '#teleport' }, [
+        createVNode('p', null, `Hi! I'm teleport!`)
+      ]),
       createVNode('h1', { key: 0 }, 'h1'),
       createVNode('h2', { key: 1 }, 'h2'),
       createVNode('h3', { key: 2 }, 'h3'),
