@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "jest"
+    "test": "jest",
+    "compiler": "ts-node compiler-template"
   },
   "author": "",
   "license": "ISC",

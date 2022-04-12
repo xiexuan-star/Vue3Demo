@@ -61,17 +61,21 @@ const TestComponent: Component = {
   render(this: any, context: any): VNode {
     return createVNode('section', null, [
       {
-        type: 'button', props: {
-          onClick(this: any) {
-            context.value++;
+        type: 'button',
+        props: {
+          onClick(this: any, event: any) {
             context.update();
+            context.value++;
+            queueMicrotask(() => {
+              console.log(document.querySelector<HTMLElement>('#componentContent')?.innerText);
+            });
+            context.value++;
           }
-        }, children: 'click'
+        }, children: 'click this button'
       },
       this.$slots.default?.() ?? { type: COMMENT_NODE, children: 'comment' },
-      { type: 'h1', children: this.value + '' },
-      { type: AsyncComponent }
-
+      createVNode('h1', { id: 'componentContent' }, this.value + ''),
+      createVNode(AsyncComponent)
     ]);
   }
 };
@@ -95,7 +99,6 @@ const nodeList1: Component = {
         key: 5,
         onClick(...args: any) {
           console.log('emit listener=>', args);
-
         }, children: {
           default() {
             return createVNode('article', null, 'I\'m slot!!');
@@ -179,4 +182,4 @@ const App: Component = {
     ]);
   }
 };
-render({ type: App }, '#app');
+render(createVNode(App), '#app');

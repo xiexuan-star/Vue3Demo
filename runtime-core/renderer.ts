@@ -186,6 +186,7 @@ function queueJob(job: Function) {
     isFlushing = true;
     p.then(() => {
       try {
+        console.log('micro task!');
         queue.forEach(f => f());
       } finally {
         isFlushing = false;
@@ -323,6 +324,7 @@ function createRenderer(options: RendererOptions) {
       function performRemove() {
         insert(vnode.el, container, anchor);
       }
+
       if (vnode.transition) {
         vnode.transition.leave(vnode.el! as any, performRemove);
       } else {
