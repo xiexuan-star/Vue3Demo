@@ -1,8 +1,9 @@
 /**
  * DATA initial mode
- * CDATA
- * RCDATA
- * RAWTEXT
+ * CDATA any symbol will be used as a char
+ * RCDATA textarea and title tag
+ * RAWTEXT style xmp iframe noembed noframes noscript .etc tag
+ *         not support html entity
  *
  * HTML实体
  * */
@@ -16,9 +17,17 @@ enum TextNodes {
 
 interface Context {
   source: string;
-
+  mode: TextNodes;
 }
 
 function parse(str: string) {
-  const context: Context = { source: str };
+  // 递归下降算法
+  const context: Context = { source: str, mode: TextNodes.DATA };
+  const nodes = parseChildren(context, []);
+  return { type: 'Root', children: nodes };
+}
+
+function parseChildren(context: Context, stack: Array<any>) {
+  //
+  return [];
 }
