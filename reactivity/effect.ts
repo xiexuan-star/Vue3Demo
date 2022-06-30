@@ -52,7 +52,6 @@ class ReactiveEffect<T extends any = any> {
   }
 
   run() {
-    // TODO When I call the stop function, I can't restore the effect
     if (!this.active) {
       return this.fn();
     }

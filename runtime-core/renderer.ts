@@ -364,7 +364,6 @@ function createRenderer(options: RendererOptions) {
       attrs: shallowReactive(attrs),
       isMounted: false,
       subTree: null,
-      // 此处只针对onMounted函数实现，其他lifecycle原理相同
       mounted: [],
       unmounted: [],
       beforeUnmount: [],
@@ -427,7 +426,7 @@ function createRenderer(options: RendererOptions) {
         } else if (setupState && k in setupState) {
           isRef(setupState[k]) ? setupState[k].value = v : setupState[k] = v;
         } else {
-          console.log(`property ${ k } it's exist in this context`);
+          console.log(`property ${ k } isn't exist in this context`);
         }
         return true;
       },

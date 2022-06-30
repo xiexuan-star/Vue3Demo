@@ -38,6 +38,7 @@ export function defineAsyncComponent(options: Loader | AsyncComponentOptions) {
         return loader().catch(err => {
           if (onError && !unmounted) {
             return new Promise<Component>((resolve, reject) => {
+              // onError函数提供了一个重试的能力, 并可以根据不同的错误类型做不同的操作
               onError(err, () => {
                 retries++;
                 resolve(load());

@@ -5,7 +5,8 @@ export function computed<T extends any>(fn: () => T) {
   let dirty = true;
   let _value: T;
   const _effect = effect(fn, {
-    lazy: true, scheduler() {
+    lazy: true,
+    scheduler() {
       if (!dirty) {
         dirty = true;
         trigger(obj, 'value', TRIGGER_TYPE.SET, null);

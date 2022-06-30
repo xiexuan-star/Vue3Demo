@@ -5,7 +5,7 @@
  * RAWTEXT style xmp iframe noembed noframes noscript .etc tag
  *         not support html entity
  *
- * HTML实体
+ * HTML entity
  * */
 
 enum TextNodes {
